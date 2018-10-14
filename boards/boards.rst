@@ -19,3 +19,5 @@ under :file:`doc/templates/board.tmpl`
    nios2/index.rst
    xtensa/index.rst
    posix/index.rst
+   riscv32/index.rst
+   shields/index.rst

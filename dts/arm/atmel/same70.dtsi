@@ -6,8 +6,8 @@
  */
 
 #include <arm/armv7-m.dtsi>
-#include <atmel/same70_mem.h>
 #include <dt-bindings/i2c/i2c.h>
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	cpus {
@@ -24,13 +24,11 @@
 	flash0: flash@400000 {
 		compatible = "soc-nv-flash";
 		label = "FLASH_0";
-		reg = <0x00400000 DT_FLASH_SIZE>;
 	};
 
 	sram0: memory@20400000 {
 		device_type = "memory";
 		compatible = "mmio-sram";
-		reg = <0x20400000 DT_SRAM_SIZE>;
 	};
 
 	soc {
@@ -70,10 +68,32 @@
 			status = "disabled";
 		};
 
+		spi0: spi@40008000 {
+			compatible = "atmel,sam-spi";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x40008000 0x4000>;
+			interrupts = <21 0>;
+			peripheral-id = <21>;
+			label = "SPI_0";
+			status = "disabled";
+		};
+
+		spi1: spi@40058000 {
+			compatible = "atmel,sam-spi";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x40058000 0x4000>;
+			interrupts = <42 0>;
+			peripheral-id = <42>;
+			label = "SPI_1";
+			status = "disabled";
+		};
+
 		uart0: uart@400E0800 {
 			compatible = "atmel,sam-uart";
 			reg = <0x400E0800 0x100>;
-			interrupts = <7 0>;
+			interrupts = <7 1>;
 			peripheral-id = <7>;
 			status = "disabled";
 			label = "UART_0";
@@ -82,7 +102,7 @@
 		uart1: uart@400E0A00 {
 			compatible = "atmel,sam-uart";
 			reg = <0x400E0A00 0x100>;
-			interrupts = <8 0>;
+			interrupts = <8 1>;
 			peripheral-id = <8>;
 			status = "disabled";
 			label = "UART_1";
@@ -91,7 +111,7 @@
 		uart2: uart@400E1A00 {
 			compatible = "atmel,sam-uart";
 			reg = <0x400E1A00 0x100>;
-			interrupts = <44 0>;
+			interrupts = <44 1>;
 			peripheral-id = <44>;
 			status = "disabled";
 			label = "UART_2";
@@ -100,7 +120,7 @@
 		uart3: uart@400E1C00 {
 			compatible = "atmel,sam-uart";
 			reg = <0x400E1C00 0x100>;
-			interrupts = <45 0>;
+			interrupts = <45 1>;
 			peripheral-id = <45>;
 			status = "disabled";
 			label = "UART_3";
@@ -109,7 +129,7 @@
 		uart4: uart@400E1E00 {
 			compatible = "atmel,sam-uart";
 			reg = <0x400E1E00 0x100>;
-			interrupts = <46 0>;
+			interrupts = <46 1>;
 			peripheral-id = <46>;
 			status = "disabled";
 			label = "UART_4";
@@ -158,6 +178,56 @@
 			peripheral-id = <40>;
 			status = "disabled";
 			label = "ADC_1";
+		};
+
+		porta: gpio@400E0E00 {
+			compatible = "atmel,sam-gpio";
+			reg = <0x400E0E00 0x190>;
+			interrupts = <10 1>;
+			peripheral-id = <10>;
+			label = "PORTA";
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		portb: gpio@400E1000 {
+			compatible = "atmel,sam-gpio";
+			reg = <0x400E1000 0x190>;
+			interrupts = <11 1>;
+			peripheral-id = <11>;
+			label = "PORTB";
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		portc: gpio@400E1200 {
+			compatible = "atmel,sam-gpio";
+			reg = <0x400E1200 0x190>;
+			interrupts = <12 1>;
+			peripheral-id = <12>;
+			label = "PORTC";
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		portd: gpio@400E1400 {
+			compatible = "atmel,sam-gpio";
+			reg = <0x400E1400 0x190>;
+			interrupts = <16 1>;
+			peripheral-id = <16>;
+			label = "PORTD";
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		porte: gpio@400E1600 {
+			compatible = "atmel,sam-gpio";
+			reg = <0x400E1600 0x190>;
+			interrupts = <17 1>;
+			peripheral-id = <17>;
+			label = "PORTE";
+			gpio-controller;
+			#gpio-cells = <2>;
 		};
 	};
 };

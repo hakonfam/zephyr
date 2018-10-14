@@ -20,14 +20,14 @@ static int hts221_channel_get(struct device *dev,
 	struct hts221_data *drv_data = dev->driver_data;
 	s32_t conv_val;
 
-	__ASSERT_NO_MSG(chan == SENSOR_CHAN_TEMP ||
+	__ASSERT_NO_MSG(chan == SENSOR_CHAN_AMBIENT_TEMP ||
 			chan == SENSOR_CHAN_HUMIDITY);
 
 	/*
 	 * see "Interpreting humidity and temperature readings" document
 	 * for more details
 	 */
-	if (chan == SENSOR_CHAN_TEMP) {
+	if (chan == SENSOR_CHAN_AMBIENT_TEMP) {
 		conv_val = (s32_t)(drv_data->t1_degc_x8 -
 				     drv_data->t0_degc_x8) *
 			   (drv_data->t_sample - drv_data->t0_out) /
@@ -43,9 +43,9 @@ static int hts221_channel_get(struct device *dev,
 			   (drv_data->h1_t0_out - drv_data->h0_t0_out) +
 			   drv_data->h0_rh_x2;
 
-		/* convert humidity x2 to mili-percent */
-		val->val1 = conv_val * 500;
-		val->val2 = 0;
+		/* convert humidity x2 to percent */
+		val->val1 = conv_val / 2;
+		val->val2 = (conv_val % 2) * 500000;
 	}
 
 	return 0;
@@ -145,6 +145,12 @@ int hts221_init(struct device *dev)
 		return -EIO;
 	}
 
+	/*
+	 * the device requires about 2.2 ms to download the flash content
+	 * into the volatile mem
+	 */
+	k_sleep(3);
+
 	if (hts221_read_conversion_data(drv_data) < 0) {
 		SYS_LOG_ERR("Failed to read conversion data.");
 		return -EINVAL;
@@ -157,12 +163,11 @@ int hts221_init(struct device *dev)
 	}
 #endif
 
-	dev->driver_api = &hts221_driver_api;
-
 	return 0;
 }
 
 struct hts221_data hts221_driver;
 
-DEVICE_INIT(hts221, CONFIG_HTS221_NAME, hts221_init, &hts221_driver,
-	    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY);
+DEVICE_AND_API_INIT(hts221, CONFIG_HTS221_NAME, hts221_init, &hts221_driver,
+		    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
+		    &hts221_driver_api);

@@ -23,20 +23,28 @@
 
 /* this file is only meant to be included by kernel_structs.h */
 
-#ifndef _kernel_arch_data__h_
-#define _kernel_arch_data__h_
+#ifndef ZEPHYR_ARCH_X86_INCLUDE_KERNEL_ARCH_DATA_H_
+#define ZEPHYR_ARCH_X86_INCLUDE_KERNEL_ARCH_DATA_H_
 
 #include <toolchain.h>
 #include <linker/sections.h>
 #include <asm_inline.h>
 #include <exception.h>
 #include <kernel_arch_thread.h>
+#include <misc/util.h>
 
 #ifndef _ASMLANGUAGE
 #include <kernel.h>
 #include <kernel_internal.h>
 #include <zephyr/types.h>
 #include <misc/dlist.h>
+#endif
+
+/* Some configurations require that the stack/registers be adjusted before
+ * _thread_entry. See discussion in swap.S for _x86_thread_entry_wrapper()
+ */
+#if defined(CONFIG_X86_IAMCU) || defined(CONFIG_DEBUG_INFO)
+#define _THREAD_WRAPPER_REQUIRED
 #endif
 
 
@@ -90,9 +98,9 @@
 #define IV_INTEL_RESERVED_END 31
 
 /*
- * Model specific register (MSR) definitions.  Use the _MsrRead() and
- * _MsrWrite() primitives to read/write the MSRs.  Only the so-called
- * "Architectural MSRs" are listed, i.e. the subset of MSRs and associated
+ * Model specific register (MSR) definitions.  Use the _x86_msr_read() and
+ * _x86_msr_write() primitives to read/write the MSRs.  Only the so-called
+ * "Architectural MSRs" are listed, i.e.  the subset of MSRs and associated
  * bit fields which will not change on future processor generations.
  */
 
@@ -365,6 +373,7 @@
 #define IA32_GS_BASE_MSR 0xc0000101
 #define IA32_KERNEL_GS_BASE_MSR 0xc0000102
 #define IA32_TSC_AUX_MSR 0xc0000103
+#define IA32_SPEC_CTRL_MSR 0x48
 
 /*
  * EFLAGS value to utilize for the initial context:
@@ -378,7 +387,7 @@
 #define EFLAGS_MASK 0x00003200
 
 /* Enable paging and write protection */
-#define CR0_PAGING_ENABLE 0x80010000
+#define CR0_PG_WP_ENABLE 0x80010000
 /* Clear the 5th bit in  CR4 */
 #define CR4_PAE_DISABLE 0xFFFFFFEF
 /* Set the 5th bit in  CR4 */
@@ -387,6 +396,11 @@
 #ifndef _ASMLANGUAGE
 
 #include <misc/util.h>
+
+#ifdef _THREAD_WRAPPER_REQUIRED
+extern void _x86_thread_entry_wrapper(k_thread_entry_t entry,
+				      void *p1, void *p2, void *p3);
+#endif /* _THREAD_WRAPPER_REQUIRED */
 
 #ifdef DEBUG
 #include <misc/printk.h>
@@ -401,9 +415,6 @@ extern "C" {
 
 
 struct _kernel_arch {
-#if defined(CONFIG_DEBUG_INFO)
-	NANO_ISF *isf;    /* ptr to interrupt stack frame */
-#endif
 };
 
 typedef struct _kernel_arch _kernel_arch_t;
@@ -414,4 +425,4 @@ typedef struct _kernel_arch _kernel_arch_t;
 
 #endif /* _ASMLANGUAGE */
 
-#endif /* _kernel_arch_data__h_ */
+#endif /* ZEPHYR_ARCH_X86_INCLUDE_KERNEL_ARCH_DATA_H_ */

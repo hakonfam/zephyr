@@ -9,19 +9,49 @@
 #include <kernel_version.h>
 #include "version.h"
 
-extern void byteorder_test_memcpy_swap(void);
-extern void byteorder_test_mem_swap(void);
-extern void atomic_test(void);
-extern void bitfield_test(void);
-extern void intmath_test(void);
-extern void printk_test(void);
-extern void slist_test(void);
-extern void dlist_test(void);
-extern void rand32_test(void);
-extern void timeout_order_test(void);
-extern void clock_test(void);
+extern void test_byteorder_memcpy_swap(void);
+extern void test_byteorder_mem_swap(void);
+extern void test_atomic(void);
+extern void test_intmath(void);
+extern void test_printk(void);
+extern void test_slist(void);
+extern void test_dlist(void);
+extern void test_timeout_order(void);
+extern void test_clock_cycle(void);
+extern void test_clock_uptime(void);
+extern void test_multilib(void);
 
+/**
+ * @defgroup kernel_common_tests Common Tests
+ * @ingroup all_tests
+ * @{
+ * @}
+ *
+ */
 
+#ifdef CONFIG_ARM
+void test_bitfield(void)
+{
+	ztest_test_skip();
+}
+#else
+extern void test_bitfield(void);
+#endif
+
+#ifndef CONFIG_PRINTK
+void test_printk(void)
+{
+	ztest_test_skip();
+}
+#endif
+
+/**
+ * @brief Test sys_kernel_version_get() functionality
+ *
+ * @ingroup kernel_common_tests
+ *
+ * @see sys_kernel_version_get()
+ */
 static void test_version(void)
 {
 	u32_t version = sys_kernel_version_get();
@@ -37,21 +67,21 @@ static void test_version(void)
 
 void test_main(void)
 {
-	ztest_test_suite(common_test,
-			 ztest_unit_test(byteorder_test_memcpy_swap),
-			 ztest_unit_test(byteorder_test_mem_swap),
-			 ztest_unit_test(atomic_test),
-#ifdef CONFIG_PRINTK
-			 ztest_unit_test(printk_test),
-#endif
-			 ztest_unit_test(slist_test),
-			 ztest_unit_test(dlist_test),
-			 ztest_unit_test(rand32_test),
-			 ztest_unit_test(intmath_test),
-			 ztest_unit_test(timeout_order_test),
-			 ztest_unit_test(clock_test),
-			 ztest_unit_test(test_version)
+	ztest_test_suite(common,
+			 ztest_unit_test(test_byteorder_memcpy_swap),
+			 ztest_unit_test(test_byteorder_mem_swap),
+			 ztest_unit_test(test_atomic),
+			 ztest_unit_test(test_bitfield),
+			 ztest_unit_test(test_printk),
+			 ztest_unit_test(test_slist),
+			 ztest_unit_test(test_dlist),
+			 ztest_unit_test(test_intmath),
+			 ztest_unit_test(test_timeout_order),
+			 ztest_unit_test(test_clock_uptime),
+			 ztest_unit_test(test_clock_cycle),
+			 ztest_unit_test(test_version),
+			 ztest_unit_test(test_multilib)
 			 );
 
-	ztest_run_test_suite(common_test);
+	ztest_run_test_suite(common);
 }

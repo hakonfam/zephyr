@@ -18,8 +18,8 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  */
-#ifndef _HTTP_PARSER_H_
-#define _HTTP_PARSER_H_
+#ifndef ZEPHYR_INCLUDE_NET_HTTP_PARSER_H_
+#define ZEPHYR_INCLUDE_NET_HTTP_PARSER_H_
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -211,6 +211,11 @@ struct http_parser {
 	void *data; /* A pointer to get hook to the "connection" or "socket"
 		     * object
 		     */
+
+	/* Remote socket address of http connection, where parser can initiate
+	 * replies if necessary.
+	 */
+	const struct sockaddr *addr;
 };
 
 

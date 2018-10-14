@@ -186,7 +186,7 @@ static u32_t init(u8_t chan, u8_t phy, void (*isr)(void))
 	/* NOTE: No whitening in test mode. */
 	radio_phy_set(test_phy, test_phy_flags);
 	radio_tmr_tifs_set(150);
-	radio_tx_power_set(0);
+	radio_tx_power_max_set();
 	radio_freq_chan_set((chan << 1) + 2);
 	radio_aa_set((u8_t *)&test_sync_word);
 	radio_crc_configure(0x65b, 0x555555);
@@ -222,11 +222,11 @@ u32_t ll_test_tx(u8_t chan, u8_t len, u8_t type, u8_t phy)
 		break;
 
 	case 0x01:
-		memset(payload, 0x0f, len);
+		(void)memset(payload, 0x0f, len);
 		break;
 
 	case 0x02:
-		memset(payload, 0x55, len);
+		(void)memset(payload, 0x55, len);
 		break;
 
 	case 0x03:
@@ -234,19 +234,19 @@ u32_t ll_test_tx(u8_t chan, u8_t len, u8_t type, u8_t phy)
 		break;
 
 	case 0x04:
-		memset(payload, 0xff, len);
+		(void)memset(payload, 0xff, len);
 		break;
 
 	case 0x05:
-		memset(payload, 0x00, len);
+		(void)memset(payload, 0x00, len);
 		break;
 
 	case 0x06:
-		memset(payload, 0xf0, len);
+		(void)memset(payload, 0xf0, len);
 		break;
 
 	case 0x07:
-		memset(payload, 0xaa, len);
+		(void)memset(payload, 0xaa, len);
 		break;
 	}
 

@@ -5,8 +5,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef __SENSOR_BME280_H__
-#define __SENSOR_BME280_H__
+#ifndef ZEPHYR_DRIVERS_SENSOR_BME280_BME280_H_
+#define ZEPHYR_DRIVERS_SENSOR_BME280_BME280_H_
 
 #include <zephyr/types.h>
 #include <device.h>
@@ -108,7 +108,7 @@ struct bme280_data {
 	u16_t i2c_slave_addr;
 #elif defined CONFIG_BME280_DEV_TYPE_SPI
 	struct device *spi;
-	int spi_slave;
+	struct spi_config spi_cfg;
 #else
 #error "BME280 device type not specified"
 #endif
@@ -146,4 +146,4 @@ struct bme280_data {
 #define SYS_LOG_DOMAIN "BME280"
 #define SYS_LOG_LEVEL CONFIG_SYS_LOG_SENSOR_LEVEL
 #include <logging/sys_log.h>
-#endif /* __SENSOR_BME280_H__ */
+#endif /* ZEPHYR_DRIVERS_SENSOR_BME280_BME280_H_ */

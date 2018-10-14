@@ -6,6 +6,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define LOG_MODULE_NAME net_test
+#define NET_LOG_LEVEL CONFIG_NET_UDP_LOG_LEVEL
+
 #include <zephyr.h>
 #include <linker/sections.h>
 
@@ -24,10 +27,9 @@
 #include <net/ethernet.h>
 #include <net/udp.h>
 
-#include <tc_util.h>
 #include <ztest.h>
 
-#if defined(CONFIG_NET_DEBUG_UDP)
+#if NET_LOG_LEVEL >= LOG_LEVEL_DBG
 #define DBG(fmt, ...) printk(fmt, ##__VA_ARGS__)
 #else
 #define DBG(fmt, ...)
@@ -35,7 +37,7 @@
 
 #include "udp_internal.h"
 
-#if defined(CONFIG_NET_DEBUG_UDP)
+#if NET_LOG_LEVEL >= LOG_LEVEL_DBG
 #define NET_LOG_ENABLED 1
 #endif
 #include "net_private.h"
@@ -106,10 +108,13 @@ static inline struct in_addr *if_get_addr(struct net_if *iface)
 	int i;
 
 	for (i = 0; i < NET_IF_MAX_IPV4_ADDR; i++) {
-		if (iface->ipv4.unicast[i].is_used &&
-		    iface->ipv4.unicast[i].address.family == AF_INET &&
-		    iface->ipv4.unicast[i].addr_state == NET_ADDR_PREFERRED) {
-			return &iface->ipv4.unicast[i].address.in_addr;
+		if (iface->config.ip.ipv4->unicast[i].is_used &&
+		    iface->config.ip.ipv4->unicast[i].address.family ==
+								AF_INET &&
+		    iface->config.ip.ipv4->unicast[i].addr_state ==
+							NET_ADDR_PREFERRED) {
+			return
+			    &iface->config.ip.ipv4->unicast[i].address.in_addr;
 		}
 	}
 
@@ -190,8 +195,7 @@ static void setup_ipv6_udp(struct net_pkt *pkt,
 	NET_IPV6_HDR(pkt)->vtc = 0x60;
 	NET_IPV6_HDR(pkt)->tcflow = 0;
 	NET_IPV6_HDR(pkt)->flow = 0;
-	NET_IPV6_HDR(pkt)->len[0] = 0;
-	NET_IPV6_HDR(pkt)->len[1] = NET_UDPH_LEN + strlen(payload);
+	NET_IPV6_HDR(pkt)->len = htons(NET_UDPH_LEN + strlen(payload));
 
 	NET_IPV6_HDR(pkt)->nexthdr = IPPROTO_UDP;
 	NET_IPV6_HDR(pkt)->hop_limit = 255;
@@ -254,9 +258,8 @@ static void setup_ipv6_udp_long(struct net_pkt *pkt,
 	ipv6.vtc = 0x60;
 	ipv6.tcflow = 0;
 	ipv6.flow = 0;
-	ipv6.len[0] = 0;
-	ipv6.len[1] = NET_UDPH_LEN + strlen(payload) +
-		sizeof(ipv6_hop_by_hop_ext_hdr);
+	ipv6.len = htons(NET_UDPH_LEN + strlen(payload) +
+				sizeof(ipv6_hop_by_hop_ext_hdr));
 
 	ipv6.nexthdr = 0; /* HBHO */
 	ipv6.hop_limit = 255;
@@ -316,9 +319,9 @@ static void setup_ipv4_udp(struct net_pkt *pkt,
 {
 	NET_IPV4_HDR(pkt)->vhl = 0x45;
 	NET_IPV4_HDR(pkt)->tos = 0;
-	NET_IPV4_HDR(pkt)->len[0] = 0;
-	NET_IPV4_HDR(pkt)->len[1] = NET_UDPH_LEN +
-		sizeof(struct net_ipv4_hdr) + strlen(payload);
+	NET_IPV4_HDR(pkt)->len = htons(NET_UDPH_LEN +
+					sizeof(struct net_ipv4_hdr) +
+					strlen(payload));
 
 	NET_IPV4_HDR(pkt)->proto = IPPROTO_UDP;
 
@@ -351,8 +354,12 @@ static bool send_ipv6_udp_msg(struct net_if *iface,
 	struct net_buf *frag;
 	int ret;
 
-	pkt = net_pkt_get_reserve_tx(0, K_FOREVER);
-	frag = net_pkt_get_frag(pkt, K_FOREVER);
+	pkt = net_pkt_get_reserve_tx(0, K_SECONDS(1));
+	zassert_not_null(pkt, "Out of mem");
+
+	frag = net_pkt_get_frag(pkt, K_SECONDS(1));
+	zassert_not_null(frag, "Out of mem");
+
 	net_pkt_frag_add(pkt, frag);
 
 	net_pkt_set_iface(pkt, iface);
@@ -397,8 +404,12 @@ static bool send_ipv6_udp_long_msg(struct net_if *iface,
 	struct net_buf *frag;
 	int ret;
 
-	pkt = net_pkt_get_reserve_tx(0, K_FOREVER);
-	frag = net_pkt_get_frag(pkt, K_FOREVER);
+	pkt = net_pkt_get_reserve_tx(0, K_SECONDS(1));
+	zassert_not_null(pkt, "Out of mem");
+
+	frag = net_pkt_get_frag(pkt, K_SECONDS(1));
+	zassert_not_null(frag, "Out of mem");
+
 	net_pkt_frag_add(pkt, frag);
 
 	net_pkt_set_iface(pkt, iface);
@@ -443,8 +454,12 @@ static bool send_ipv4_udp_msg(struct net_if *iface,
 	struct net_buf *frag;
 	int ret;
 
-	pkt = net_pkt_get_reserve_tx(0, K_FOREVER);
-	frag = net_pkt_get_frag(pkt, K_FOREVER);
+	pkt = net_pkt_get_reserve_tx(0, K_SECONDS(1));
+	zassert_not_null(pkt, "Out of mem");
+
+	frag = net_pkt_get_frag(pkt, K_SECONDS(1));
+	zassert_not_null(frag, "Out of mem");
+
 	net_pkt_frag_add(pkt, frag);
 
 	net_pkt_set_iface(pkt, iface);
@@ -502,7 +517,7 @@ static void set_port(sa_family_t family, struct sockaddr *raddr,
 	}
 }
 
-void run_tests(void)
+void test_udp(void)
 {
 	k_thread_priority_set(k_current_get(), K_PRIO_COOP(7));
 
@@ -747,6 +762,6 @@ void run_tests(void)
 void test_main(void)
 {
 	ztest_test_suite(test_udp_fn,
-		ztest_unit_test(run_tests));
+		ztest_unit_test(test_udp));
 	ztest_run_test_suite(test_udp_fn);
 }

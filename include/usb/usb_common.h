@@ -41,8 +41,8 @@
 
 #include <version.h>
 
-#ifndef USB_COMMON_H_
-#define USB_COMMON_H_
+#ifndef ZEPHYR_INCLUDE_USB_USB_COMMON_H_
+#define ZEPHYR_INCLUDE_USB_USB_COMMON_H_
 
 #define BCD(x) ((((x) / 10) << 4) | ((x) / 10))
 
@@ -65,10 +65,12 @@
 #define USB_ENDPOINT_DESC		0x05
 #define USB_DEVICE_QUAL_DESC		0x06
 #define USB_INTERFACE_ASSOC_DESC	0x0B
+#define USB_DEVICE_CAPABILITY_DESC	0x10
 #define USB_HID_DESC			0x21
 #define USB_HID_REPORT_DESC		0x22
 #define USB_DFU_FUNCTIONAL_DESC		0x21
 #define USB_ASSOCIATION_DESC		0x0B
+#define USB_BINARY_OBJECT_STORE_DESC	0x0F
 
 /* Useful define */
 #define USB_1_1				0x0110
@@ -100,11 +102,9 @@
 #define WIRELESS_DEVICE_CLASS		0xE0
 #define MISC_CLASS			0xEF
 #define CUSTOM_CLASS			0xFF
-#define DFU_CLASS			0xFE
+#define DFU_DEVICE_CLASS		0xFE
 
 /* Sub-classes */
-#define ACM_SUBCLASS			0x02
-#define CDC_ECM_SUBCLASS		0x06
 #define CDC_NCM_SUBCLASS		0x0d
 #define BOOT_INTERFACE_SUBCLASS		0x01
 #define SCSI_TRANSPARENT_SUBCLASS	0x06
@@ -144,7 +144,7 @@ struct usb_device_descriptor {
 	u8_t bNumConfigurations;
 } __packed;
 
-/** UNICODE String Descriptor */
+/** Unicode (UTF16LE) String Descriptor */
 struct usb_string_descriptor {
 	u8_t bLength;
 	u8_t bDescriptorType;
@@ -198,4 +198,4 @@ struct usb_ep_descriptor {
 	u8_t bInterval;
 } __packed;
 
-#endif /* USB_COMMON_H_ */
+#endif /* ZEPHYR_INCLUDE_USB_USB_COMMON_H_ */

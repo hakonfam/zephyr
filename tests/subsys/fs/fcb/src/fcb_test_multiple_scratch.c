@@ -27,17 +27,17 @@ void fcb_test_multi_scratch(void)
 	 * Now fill up everything. We should be able to get 3 of the sectors
 	 * full.
 	 */
-	memset(elem_cnts, 0, sizeof(elem_cnts));
+	(void)memset(elem_cnts, 0, sizeof(elem_cnts));
 	while (1) {
 		rc = fcb_append(fcb, sizeof(test_data), &loc);
 		if (rc == FCB_ERR_NOSPACE) {
 			break;
 		}
-		idx = loc.fe_area - &test_fcb_area[0];
+		idx = loc.fe_sector - &test_fcb_sector[0];
 		elem_cnts[idx]++;
 
-		rc = flash_area_write(loc.fe_area, loc.fe_data_off, test_data,
-		  sizeof(test_data));
+		rc = flash_area_write(fcb->fap, FCB_ENTRY_FA_DATA_OFF(loc),
+				      test_data, sizeof(test_data));
 		zassert_true(rc == 0, "flash_area_write call failure");
 
 		rc = fcb_append_finish(fcb, &loc);
@@ -61,11 +61,11 @@ void fcb_test_multi_scratch(void)
 		if (rc == FCB_ERR_NOSPACE) {
 			break;
 		}
-		idx = loc.fe_area - &test_fcb_area[0];
+		idx = loc.fe_sector - &test_fcb_sector[0];
 		elem_cnts[idx]++;
 
-		rc = flash_area_write(loc.fe_area, loc.fe_data_off, test_data,
-		  sizeof(test_data));
+		rc = flash_area_write(fcb->fap, FCB_ENTRY_FA_DATA_OFF(loc),
+				      test_data, sizeof(test_data));
 		zassert_true(rc == 0, "flash_area_write call failure");
 
 		rc = fcb_append_finish(fcb, &loc);
@@ -80,7 +80,7 @@ void fcb_test_multi_scratch(void)
 	rc = fcb_rotate(fcb);
 	zassert_true(rc == 0, "fcb_rotate call failure");
 
-	memset(&cnts, 0, sizeof(cnts));
+	(void)memset(&cnts, 0, sizeof(cnts));
 	rc = fcb_walk(fcb, NULL, fcb_test_cnt_elems_cb, &aa_arg);
 	zassert_true(rc == 0, "fcb_walk call failure");
 

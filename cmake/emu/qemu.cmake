@@ -3,10 +3,21 @@ if("${ARCH}" STREQUAL "x86")
 else()
   set_ifndef(QEMU_binary_suffix ${ARCH})
 endif()
+
+set(qemu_alternate_path $ENV{QEMU_BIN_PATH})
+if(qemu_alternate_path)
+find_program(
+  QEMU
+  PATHS ${qemu_alternate_path}
+  NO_DEFAULT_PATH
+  NAMES qemu-system-${QEMU_binary_suffix}
+  )
+else()
 find_program(
   QEMU
   qemu-system-${QEMU_binary_suffix}
   )
+endif()
 
 set(qemu_targets
   run
@@ -66,7 +77,49 @@ if(CONFIG_NETWORKING)
   endif()
 endif()
 
-if(QEMU_NET_STACK)
+# TO create independent pipes for each QEMU application set QEMU_PIPE_STACK
+if(QEMU_PIPE_STACK)
+  list(APPEND qemu_targets
+    node
+    )
+
+  if(NOT QEMU_PIPE_ID)
+    set(QEMU_PIPE_ID 1)
+  endif()
+
+  list(APPEND QEMU_FLAGS
+    -serial none
+    )
+
+  list(APPEND MORE_FLAGS_FOR_node
+        -serial pipe:/tmp/hub/ip-stack-node${QEMU_PIPE_ID}
+        -pidfile qemu-node${QEMU_PIPE_ID}.pid
+        )
+
+  set(PIPE_NODE_IN  /tmp/hub/ip-stack-node${QEMU_PIPE_ID}.in)
+  set(PIPE_NODE_OUT /tmp/hub/ip-stack-node${QEMU_PIPE_ID}.out)
+
+  set(pipes
+    ${PIPE_NODE_IN}
+    ${PIPE_NODE_OUT}
+    )
+
+  set(destroy_pipe_commands
+    COMMAND ${CMAKE_COMMAND} -E remove -f ${pipes}
+    )
+
+  set(create_pipe_commands
+    COMMAND ${CMAKE_COMMAND} -E make_directory /tmp/hub
+    COMMAND mkfifo ${PIPE_NODE_IN}
+    COMMAND mkfifo ${PIPE_NODE_OUT}
+    )
+
+  set(PRE_QEMU_COMMANDS_FOR_node
+    ${destroy_pipe_commands}
+    ${create_pipe_commands}
+    )
+
+elseif(QEMU_NET_STACK)
   list(APPEND qemu_targets
     client
     server
@@ -153,7 +206,7 @@ if(QEMU_NET_STACK)
       # TODO: Support cleanup of the monitor_15_4 process
       )
   endif()
-endif(QEMU_NET_STACK)
+endif(QEMU_PIPE_STACK)
 
 if(CONFIG_X86_IAMCU)
   list(APPEND PRE_QEMU_COMMANDS

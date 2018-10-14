@@ -1,5 +1,5 @@
 /*
- * Copyright (c) Justin Watson 2017
+ * Copyright (c) Justin Watson 2018
  * SPDX-License-Identifier: Apache-2.0
  */
 

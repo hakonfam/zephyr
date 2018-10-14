@@ -1,6 +1,7 @@
 # Kconfig - Atmel SAM UART configuration options
 #
 # Copyright (c) 2017 Piotr Mienkowski
+# Copyright (c) 2018 Justin Watson
 # SPDX-License-Identifier: Apache-2.0
 #
 
@@ -8,7 +9,7 @@ menuconfig UART_SAM
 	bool "Atmel SAM MCU family UART driver"
 	depends on SOC_FAMILY_SAM
 	select SERIAL_HAS_DRIVER
-	default n
+	select SERIAL_SUPPORT_INTERRUPT
 	help
 	  This option enables the UARTx driver for Atmel SAM MCUs.
 
@@ -17,7 +18,6 @@ menuconfig UART_SAM
 config UART_SAM_PORT_0
 	bool "Enable UART0"
 	depends on UART_SAM
-	default n
 	help
 	  Enable UART0 at boot.
 
@@ -26,7 +26,6 @@ config UART_SAM_PORT_0
 config UART_SAM_PORT_1
 	bool "Enable UART1"
 	depends on UART_SAM
-	default n
 	help
 	  Enable UART1 at boot.
 
@@ -53,7 +52,6 @@ endif # UART_SAM_PORT_1
 config UART_SAM_PORT_2
 	bool "Enable UART2"
 	depends on UART_SAM
-	default n
 	help
 	  Enable UART2 at boot
 
@@ -62,7 +60,6 @@ config UART_SAM_PORT_2
 config UART_SAM_PORT_3
 	bool "Enable UART3"
 	depends on UART_SAM
-	default n
 	help
 	  Enable UART3 at boot
 
@@ -86,7 +83,6 @@ endif # UART_SAM_PORT_3
 config UART_SAM_PORT_4
 	bool "Enable UART4"
 	depends on UART_SAM
-	default n
 	help
 	  Enable UART4 at boot
 

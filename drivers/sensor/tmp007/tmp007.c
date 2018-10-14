@@ -68,7 +68,7 @@ static int tmp007_sample_fetch(struct device *dev, enum sensor_channel chan)
 	struct tmp007_data *drv_data = dev->driver_data;
 	u16_t val;
 
-	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL || chan == SENSOR_CHAN_TEMP);
+	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL || chan == SENSOR_CHAN_AMBIENT_TEMP);
 
 	if (tmp007_reg_read(drv_data, TMP007_REG_TOBJ, &val) < 0) {
 		return -EIO;
@@ -90,7 +90,7 @@ static int tmp007_channel_get(struct device *dev,
 	struct tmp007_data *drv_data = dev->driver_data;
 	s32_t uval;
 
-	if (chan != SENSOR_CHAN_TEMP) {
+	if (chan != SENSOR_CHAN_AMBIENT_TEMP) {
 		return -ENOTSUP;
 	}
 
@@ -128,12 +128,11 @@ int tmp007_init(struct device *dev)
 	}
 #endif
 
-	dev->driver_api = &tmp007_driver_api;
-
 	return 0;
 }
 
 struct tmp007_data tmp007_driver;
 
-DEVICE_INIT(tmp007, CONFIG_TMP007_NAME, tmp007_init, &tmp007_driver,
-	    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY);
+DEVICE_AND_API_INIT(tmp007, CONFIG_TMP007_NAME, tmp007_init, &tmp007_driver,
+		    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
+		    &tmp007_driver_api);

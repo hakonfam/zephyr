@@ -8,7 +8,7 @@
 if BOARD_NUCLEO_F091RC
 
 config BOARD
-	default nucleo_f091rc
+	default "nucleo_f091rc"
 
 if UART_CONSOLE
 
@@ -26,5 +26,18 @@ config I2C_2
 	default y
 
 endif # I2C
+
+if SPI
+
+config SPI_1
+	default y
+
+config SPI_2
+	default y
+
+config SPI_STM32_INTERRUPT
+	default y
+
+endif # SPI
 
 endif # BOARD_NUCLEO_F091RC

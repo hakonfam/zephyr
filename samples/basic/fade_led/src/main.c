@@ -25,13 +25,16 @@
 #elif defined(CONFIG_SOC_QUARK_SE_C1000) || defined(CONFIG_SOC_QUARK_D2000)
 #define PWM_DRIVER CONFIG_PWM_QMSI_DEV_NAME
 #define PWM_CHANNEL 0
-#elif defined(CONFIG_SOC_FAMILY_NRF5)
+#elif defined(CONFIG_SOC_FAMILY_NRF)
 #include <board.h>
 #define PWM_DRIVER CONFIG_PWM_NRF5_SW_0_DEV_NAME
 #define PWM_CHANNEL LED0_GPIO_PIN
 #elif defined(CONFIG_BOARD_HEXIWEAR_K64)
 #define PWM_DRIVER	GREEN_PWM_NAME
 #define PWM_CHANNEL	GREEN_PWM_CHANNEL
+#elif defined(CONFIG_SOC_ESP32)
+#define PWM_DRIVER CONFIG_PWM_LED_ESP32_DEV_NAME_0
+#define PWM_CHANNEL	21
 #else
 #error "Choose supported PWM driver"
 #endif

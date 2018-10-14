@@ -1,0 +1,18 @@
+
+choice
+	prompt "SoC/CPU/Configuration Selection"
+
+source "$(SOC_DIR)/$(ARCH)/*/Kconfig.soc"
+
+endchoice
+
+menu "Hardware Configuration"
+osource "$(SOC_DIR)/$(ARCH)/Kconfig"
+osource "$(SOC_DIR)/$(ARCH)/*/Kconfig"
+
+
+module = SOC
+module-str = SOC
+source "subsys/logging/Kconfig.template.log_config"
+
+endmenu

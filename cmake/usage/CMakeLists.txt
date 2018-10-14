@@ -1,6 +1,10 @@
+string(REPLACE ";" " " BOARD_ROOT_SPACE_SEPARATED "${BOARD_ROOT}")
+
 add_custom_target(
   usage
-  ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/usage.cmake
+  ${CMAKE_COMMAND}
+  -DBOARD_ROOT_SPACE_SEPARATED=${BOARD_ROOT_SPACE_SEPARATED}
+  -P ${CMAKE_CURRENT_SOURCE_DIR}/usage.cmake
   )
 
 add_custom_target(

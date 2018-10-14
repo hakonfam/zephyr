@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define LOG_MODULE_NAME net_test
+#define NET_LOG_LEVEL CONFIG_NET_SOCKETS_LOG_LEVEL
+
 #include <ztest_assert.h>
 #include <net/socket.h>
 
@@ -101,12 +104,12 @@ static void test_accept(int sock, int *new_sock, struct sockaddr *addr,
 	zassert_true(*new_sock >= 0, "accept failed");
 }
 
-static void test_recv(int sock)
+static void test_recv(int sock, int flags)
 {
 	ssize_t recved = 0;
 	char rx_buf[30] = {0};
 
-	recved = recv(sock, rx_buf, sizeof(rx_buf), 0);
+	recved = recv(sock, rx_buf, sizeof(rx_buf), flags);
 	zassert_equal(recved,
 		      strlen(TEST_STR_SMALL),
 		      "unexpected received bytes");
@@ -116,6 +119,7 @@ static void test_recv(int sock)
 }
 
 static void test_recvfrom(int sock,
+			  int flags,
 			  struct sockaddr *addr,
 			  socklen_t *addrlen)
 {
@@ -125,7 +129,7 @@ static void test_recvfrom(int sock,
 	recved = recvfrom(sock,
 			  rx_buf,
 			  sizeof(rx_buf),
-			  0,
+			  flags,
 			  addr,
 			  addrlen);
 	zassert_equal(recved,
@@ -154,12 +158,12 @@ void test_v4_send_recv(void)
 	struct sockaddr addr;
 	socklen_t addrlen = sizeof(addr);
 
-	prepare_sock_v4(CONFIG_NET_APP_MY_IPV4_ADDR,
+	prepare_sock_v4(CONFIG_NET_CONFIG_MY_IPV4_ADDR,
 			ANY_PORT,
 			&c_sock,
 			&c_saddr);
 
-	prepare_sock_v4(CONFIG_NET_APP_MY_IPV4_ADDR,
+	prepare_sock_v4(CONFIG_NET_CONFIG_MY_IPV4_ADDR,
 			SERVER_PORT,
 			&s_sock,
 			&s_saddr);
@@ -173,7 +177,8 @@ void test_v4_send_recv(void)
 	test_accept(s_sock, &new_sock, &addr, &addrlen);
 	zassert_equal(addrlen, sizeof(struct sockaddr_in), "wrong addrlen");
 
-	test_recv(new_sock);
+	test_recv(new_sock, MSG_PEEK);
+	test_recv(new_sock, 0);
 
 	test_close(new_sock);
 	test_close(c_sock);
@@ -193,12 +198,12 @@ void test_v6_send_recv(void)
 	struct sockaddr addr;
 	socklen_t addrlen = sizeof(addr);
 
-	prepare_sock_v6(CONFIG_NET_APP_MY_IPV6_ADDR,
+	prepare_sock_v6(CONFIG_NET_CONFIG_MY_IPV6_ADDR,
 			ANY_PORT,
 			&c_sock,
 			&c_saddr);
 
-	prepare_sock_v6(CONFIG_NET_APP_MY_IPV6_ADDR,
+	prepare_sock_v6(CONFIG_NET_CONFIG_MY_IPV6_ADDR,
 			SERVER_PORT,
 			&s_sock,
 			&s_saddr);
@@ -212,7 +217,8 @@ void test_v6_send_recv(void)
 	test_accept(s_sock, &new_sock, &addr, &addrlen);
 	zassert_equal(addrlen, sizeof(struct sockaddr_in6), "wrong addrlen");
 
-	test_recv(new_sock);
+	test_recv(new_sock, MSG_PEEK);
+	test_recv(new_sock, 0);
 
 	test_close(new_sock);
 	test_close(s_sock);
@@ -231,12 +237,12 @@ void test_v4_sendto_recvfrom(void)
 	struct sockaddr addr;
 	socklen_t addrlen = sizeof(addr);
 
-	prepare_sock_v4(CONFIG_NET_APP_MY_IPV4_ADDR,
+	prepare_sock_v4(CONFIG_NET_CONFIG_MY_IPV4_ADDR,
 			ANY_PORT,
 			&c_sock,
 			&c_saddr);
 
-	prepare_sock_v4(CONFIG_NET_APP_MY_IPV4_ADDR,
+	prepare_sock_v4(CONFIG_NET_CONFIG_MY_IPV4_ADDR,
 			SERVER_PORT,
 			&s_sock,
 			&s_saddr);
@@ -251,7 +257,10 @@ void test_v4_sendto_recvfrom(void)
 	test_accept(s_sock, &new_sock, &addr, &addrlen);
 	zassert_equal(addrlen, sizeof(struct sockaddr_in), "wrong addrlen");
 
-	test_recvfrom(new_sock, &addr, &addrlen);
+	test_recvfrom(new_sock, MSG_PEEK, &addr, &addrlen);
+	zassert_equal(addrlen, sizeof(struct sockaddr_in), "wrong addrlen");
+
+	test_recvfrom(new_sock, 0, &addr, &addrlen);
 	zassert_equal(addrlen, sizeof(struct sockaddr_in), "wrong addrlen");
 
 	test_close(new_sock);
@@ -271,12 +280,12 @@ void test_v6_sendto_recvfrom(void)
 	struct sockaddr addr;
 	socklen_t addrlen = sizeof(addr);
 
-	prepare_sock_v6(CONFIG_NET_APP_MY_IPV6_ADDR,
+	prepare_sock_v6(CONFIG_NET_CONFIG_MY_IPV6_ADDR,
 			ANY_PORT,
 			&c_sock,
 			&c_saddr);
 
-	prepare_sock_v6(CONFIG_NET_APP_MY_IPV6_ADDR,
+	prepare_sock_v6(CONFIG_NET_CONFIG_MY_IPV6_ADDR,
 			SERVER_PORT,
 			&s_sock,
 			&s_saddr);
@@ -291,7 +300,10 @@ void test_v6_sendto_recvfrom(void)
 	test_accept(s_sock, &new_sock, &addr, &addrlen);
 	zassert_equal(addrlen, sizeof(struct sockaddr_in6), "wrong addrlen");
 
-	test_recvfrom(new_sock, &addr, &addrlen);
+	test_recvfrom(new_sock, MSG_PEEK, &addr, &addrlen);
+	zassert_equal(addrlen, sizeof(struct sockaddr_in6), "wrong addrlen");
+
+	test_recvfrom(new_sock, 0, &addr, &addrlen);
 	zassert_equal(addrlen, sizeof(struct sockaddr_in6), "wrong addrlen");
 
 	test_close(new_sock);
@@ -312,12 +324,12 @@ void test_v4_sendto_recvfrom_null_dest(void)
 	struct sockaddr addr;
 	socklen_t addrlen = sizeof(addr);
 
-	prepare_sock_v4(CONFIG_NET_APP_MY_IPV4_ADDR,
+	prepare_sock_v4(CONFIG_NET_CONFIG_MY_IPV4_ADDR,
 			ANY_PORT,
 			&c_sock,
 			&c_saddr);
 
-	prepare_sock_v4(CONFIG_NET_APP_MY_IPV4_ADDR,
+	prepare_sock_v4(CONFIG_NET_CONFIG_MY_IPV4_ADDR,
 			SERVER_PORT,
 			&s_sock,
 			&s_saddr);
@@ -332,7 +344,7 @@ void test_v4_sendto_recvfrom_null_dest(void)
 	test_accept(s_sock, &new_sock, &addr, &addrlen);
 	zassert_equal(addrlen, sizeof(struct sockaddr_in), "wrong addrlen");
 
-	test_recvfrom(new_sock, NULL, NULL);
+	test_recvfrom(new_sock, 0, NULL, NULL);
 
 	test_close(new_sock);
 	test_close(s_sock);
@@ -352,12 +364,12 @@ void test_v6_sendto_recvfrom_null_dest(void)
 	struct sockaddr addr;
 	socklen_t addrlen = sizeof(addr);
 
-	prepare_sock_v6(CONFIG_NET_APP_MY_IPV6_ADDR,
+	prepare_sock_v6(CONFIG_NET_CONFIG_MY_IPV6_ADDR,
 			ANY_PORT,
 			&c_sock,
 			&c_saddr);
 
-	prepare_sock_v6(CONFIG_NET_APP_MY_IPV6_ADDR,
+	prepare_sock_v6(CONFIG_NET_CONFIG_MY_IPV6_ADDR,
 			SERVER_PORT,
 			&s_sock,
 			&s_saddr);
@@ -372,7 +384,7 @@ void test_v6_sendto_recvfrom_null_dest(void)
 	test_accept(s_sock, &new_sock, &addr, &addrlen);
 	zassert_equal(addrlen, sizeof(struct sockaddr_in6), "wrong addrlen");
 
-	test_recvfrom(new_sock, NULL, NULL);
+	test_recvfrom(new_sock, 0, NULL, NULL);
 
 	test_close(new_sock);
 	test_close(s_sock);
@@ -384,12 +396,12 @@ void test_v6_sendto_recvfrom_null_dest(void)
 void test_main(void)
 {
 	ztest_test_suite(socket_tcp,
-			 ztest_unit_test(test_v4_send_recv),
-			 ztest_unit_test(test_v6_send_recv),
-			 ztest_unit_test(test_v4_sendto_recvfrom),
-			 ztest_unit_test(test_v6_sendto_recvfrom),
-			 ztest_unit_test(test_v4_sendto_recvfrom_null_dest),
-			 ztest_unit_test(test_v6_sendto_recvfrom_null_dest));
+			 ztest_user_unit_test(test_v4_send_recv),
+			 ztest_user_unit_test(test_v6_send_recv),
+			 ztest_user_unit_test(test_v4_sendto_recvfrom),
+			 ztest_user_unit_test(test_v6_sendto_recvfrom),
+			 ztest_user_unit_test(test_v4_sendto_recvfrom_null_dest),
+			 ztest_user_unit_test(test_v6_sendto_recvfrom_null_dest));
 
 	ztest_run_test_suite(socket_tcp);
 }

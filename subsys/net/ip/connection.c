@@ -8,10 +8,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#if defined(CONFIG_NET_DEBUG_CONN)
-#define SYS_LOG_DOMAIN "net/conn"
-#define NET_LOG_ENABLED 1
-#endif
+#define LOG_MODULE_NAME net_conn
+#define NET_LOG_LEVEL CONFIG_NET_CONN_LOG_LEVEL
 
 #include <errno.h>
 #include <misc/util.h>
@@ -19,12 +17,13 @@
 #include <net/net_core.h>
 #include <net/net_pkt.h>
 #include <net/udp.h>
+#include <net/tcp.h>
 
 #include "net_private.h"
 #include "icmpv6.h"
 #include "icmpv4.h"
 #include "udp_internal.h"
-#include "tcp.h"
+#include "tcp_internal.h"
 #include "connection.h"
 #include "net_stats.h"
 
@@ -362,7 +361,7 @@ int net_conn_unregister(struct net_conn_handle *handle)
 	NET_DBG("[%zu] connection handler %p removed",
 		(conn - conns) / sizeof(*conn), conn);
 
-	memset(conn, 0, sizeof(*conn));
+	(void)memset(conn, 0, sizeof(*conn));
 
 	return 0;
 }
@@ -389,7 +388,6 @@ int net_conn_change_callback(struct net_conn_handle *handle,
 	return 0;
 }
 
-#if defined(CONFIG_NET_DEBUG_CONN)
 static inline
 void prepare_register_debug_print(char *dst, int dst_len,
 				  char *src, int src_len,
@@ -397,50 +395,49 @@ void prepare_register_debug_print(char *dst, int dst_len,
 				  const struct sockaddr *local_addr)
 {
 	if (remote_addr && remote_addr->sa_family == AF_INET6) {
-#if defined(CONFIG_NET_IPV6)
-		snprintk(dst, dst_len, "%s",
-			 net_sprint_ipv6_addr(&net_sin6(remote_addr)->
-							sin6_addr));
-#else
-		snprintk(dst, dst_len, "%s", "?");
-#endif
+		if (IS_ENABLED(CONFIG_NET_IPV6)) {
+			snprintk(dst, dst_len, "%s",
+				 log_strdup(net_sprint_ipv6_addr(
+					  &net_sin6(remote_addr)->sin6_addr)));
+		} else {
+			snprintk(dst, dst_len, "%s", "?");
+		}
 
 	} else if (remote_addr && remote_addr->sa_family == AF_INET) {
-#if defined(CONFIG_NET_IPV4)
-		snprintk(dst, dst_len, "%s",
-			 net_sprint_ipv4_addr(&net_sin(remote_addr)->
-							sin_addr));
-#else
-		snprintk(dst, dst_len, "%s", "?");
-#endif
+		if (IS_ENABLED(CONFIG_NET_IPV4)) {
+			snprintk(dst, dst_len, "%s",
+				 log_strdup(net_sprint_ipv4_addr(
+					  &net_sin(remote_addr)->sin_addr)));
+		} else {
+			snprintk(dst, dst_len, "%s", "?");
+		}
 
 	} else {
 		snprintk(dst, dst_len, "%s", "-");
 	}
 
 	if (local_addr && local_addr->sa_family == AF_INET6) {
-#if defined(CONFIG_NET_IPV6)
-		snprintk(src, src_len, "%s",
-			 net_sprint_ipv6_addr(&net_sin6(local_addr)->
-							sin6_addr));
-#else
-		snprintk(src, src_len, "%s", "?");
-#endif
+		if (IS_ENABLED(CONFIG_NET_IPV6)) {
+			snprintk(src, src_len, "%s",
+				 log_strdup(net_sprint_ipv6_addr(
+					  &net_sin6(local_addr)->sin6_addr)));
+		} else {
+			snprintk(src, src_len, "%s", "?");
+		}
 
 	} else if (local_addr && local_addr->sa_family == AF_INET) {
-#if defined(CONFIG_NET_IPV4)
-		snprintk(src, src_len, "%s",
-			 net_sprint_ipv4_addr(&net_sin(local_addr)->
-							sin_addr));
-#else
-		snprintk(src, src_len, "%s", "?");
-#endif
+		if (IS_ENABLED(CONFIG_NET_IPV4)) {
+			snprintk(src, src_len, "%s",
+				 log_strdup(net_sprint_ipv4_addr(
+					  &net_sin(local_addr)->sin_addr)));
+		} else {
+			snprintk(src, src_len, "%s", "?");
+		}
 
 	} else {
 		snprintk(src, src_len, "%s", "-");
 	}
 }
-#endif /* CONFIG_NET_DEBUG_CONN */
 
 /* Check if we already have identical connection handler installed. */
 static int find_conn_handler(enum net_ip_protocol proto,
@@ -678,8 +675,7 @@ int net_conn_register(enum net_ip_protocol proto,
 		/* Cache needs to be cleared if new entries are added. */
 		cache_clear();
 
-#if defined(CONFIG_NET_DEBUG_CONN)
-		do {
+		if (NET_LOG_LEVEL >= LOG_LEVEL_DBG) {
 			char dst[NET_IPV6_ADDR_LEN];
 			char src[NET_IPV6_ADDR_LEN];
 
@@ -688,14 +684,14 @@ int net_conn_register(enum net_ip_protocol proto,
 						     remote_addr,
 						     local_addr);
 
-			NET_DBG("[%d/%d/%u/0x%02x] remote %p/%s/%u "
-				"local %p/%s/%u cb %p ud %p",
-				i, local_addr ? local_addr->sa_family : AF_UNSPEC,
-				proto, rank, remote_addr, dst, remote_port,
-				local_addr, src, local_port,
+			NET_DBG("[%d/%d/%u/0x%02x] remote %p/%s/%u ", i,
+				local_addr ? local_addr->sa_family : AF_UNSPEC,
+				proto, rank, remote_addr, log_strdup(dst),
+				remote_port);
+			NET_DBG("  local %p/%s/%u cb %p ud %p",
+				local_addr, log_strdup(src), local_port,
 				cb, user_data);
-		} while (0);
-#endif /* CONFIG_NET_DEBUG_CONN */
+		}
 
 		if (handle) {
 			*handle = (struct net_conn_handle *)&conns[i];
@@ -776,12 +772,39 @@ static inline void send_icmp_error(struct net_pkt *pkt)
 	}
 }
 
+static bool is_invalid_packet(struct net_pkt *pkt,
+			       u16_t src_port,
+			       u16_t dst_port)
+{
+	bool my_src_addr = false;
+
+	switch (NET_IPV6_HDR(pkt)->vtc & 0xf0) {
+#if defined(CONFIG_NET_IPV6)
+	case 0x60:
+		if (net_is_my_ipv6_addr(&NET_IPV6_HDR(pkt)->src)) {
+			my_src_addr = true;
+		}
+		break;
+#endif
+#if defined(CONFIG_NET_IPV4)
+	case 0x40:
+		if (net_is_my_ipv4_addr(&NET_IPV4_HDR(pkt)->src)) {
+			my_src_addr = true;
+		}
+		break;
+#endif
+	}
+
+	return my_src_addr && (src_port == dst_port);
+}
+
 enum net_verdict net_conn_input(enum net_ip_protocol proto, struct net_pkt *pkt)
 {
 	int i, best_match = -1;
 	s16_t best_rank = -1;
 	u16_t src_port, dst_port;
 	u16_t chksum;
+	struct net_if *pkt_iface = net_pkt_iface(pkt);
 
 #if defined(CONFIG_NET_CONN_CACHE)
 	enum net_verdict verdict;
@@ -829,17 +852,20 @@ enum net_verdict net_conn_input(enum net_ip_protocol proto, struct net_pkt *pkt)
 		return NET_DROP;
 	}
 
-	if (IS_ENABLED(CONFIG_NET_DEBUG_CONN)) {
+	if (is_invalid_packet(pkt, src_port, dst_port)) {
+		NET_DBG("Dropping invalid packet");
+		return NET_DROP;
+	}
+
+	if (NET_LOG_LEVEL >= LOG_LEVEL_DBG) {
 		int data_len = -1;
 
 		if (IS_ENABLED(CONFIG_NET_IPV4) &&
 		    net_pkt_family(pkt) == AF_INET) {
-			data_len = NET_IPV4_HDR(pkt)->len[0] * 256 +
-				NET_IPV4_HDR(pkt)->len[1];
+			data_len = ntohs(NET_IPV4_HDR(pkt)->len);
 		} else if (IS_ENABLED(CONFIG_NET_IPV6) &&
 			   net_pkt_family(pkt) == AF_INET6) {
-			data_len = NET_IPV6_HDR(pkt)->len[0] * 256 +
-				NET_IPV6_HDR(pkt)->len[1];
+			data_len = ntohs(NET_IPV6_HDR(pkt)->len);
 		}
 
 		NET_DBG("Check %s listener for pkt %p src port %u dst port %u "
@@ -907,14 +933,15 @@ enum net_verdict net_conn_input(enum net_ip_protocol proto, struct net_pkt *pkt)
 		 * If the checksum calculation fails, then discard the message.
 		 */
 		if (IS_ENABLED(CONFIG_NET_UDP_CHECKSUM) &&
-		    proto == IPPROTO_UDP) {
+		    proto == IPPROTO_UDP &&
+		    net_if_need_calc_rx_checksum(net_pkt_iface(pkt))) {
 			u16_t chksum_calc;
 
 			net_udp_set_chksum(pkt, pkt->frags);
 			chksum_calc = net_udp_get_chksum(pkt, pkt->frags);
 
 			if (chksum != chksum_calc) {
-				net_stats_update_udp_chkerr();
+				net_stats_update_udp_chkerr(net_pkt_iface(pkt));
 				NET_DBG("UDP checksum mismatch "
 					"expected 0x%04x got 0x%04x, dropping packet.",
 					ntohs(chksum_calc), ntohs(chksum));
@@ -922,14 +949,16 @@ enum net_verdict net_conn_input(enum net_ip_protocol proto, struct net_pkt *pkt)
 			}
 
 		} else if (IS_ENABLED(CONFIG_NET_TCP_CHECKSUM) &&
-			   proto == IPPROTO_TCP) {
+			   proto == IPPROTO_TCP &&
+			   net_if_need_calc_rx_checksum(net_pkt_iface(pkt))) {
 			u16_t chksum_calc;
 
 			net_tcp_set_chksum(pkt, pkt->frags);
 			chksum_calc = net_tcp_get_chksum(pkt, pkt->frags);
 
 			if (chksum != chksum_calc) {
-				net_stats_update_tcp_seg_chkerr();
+				net_stats_update_tcp_seg_chkerr(
+							net_pkt_iface(pkt));
 				NET_DBG("TCP checksum mismatch "
 					"expected 0x%04x got 0x%04x, dropping packet.",
 					ntohs(chksum_calc), ntohs(chksum));
@@ -961,7 +990,7 @@ enum net_verdict net_conn_input(enum net_ip_protocol proto, struct net_pkt *pkt)
 			goto drop;
 		}
 
-		net_stats_update_per_proto_recv(proto);
+		net_stats_update_per_proto_recv(pkt_iface, proto);
 
 		return NET_OK;
 	}
@@ -989,12 +1018,12 @@ enum net_verdict net_conn_input(enum net_ip_protocol proto, struct net_pkt *pkt)
 		send_icmp_error(pkt);
 
 		if (IS_ENABLED(CONFIG_NET_TCP) && proto == IPPROTO_TCP) {
-			net_stats_update_tcp_seg_connrst();
+			net_stats_update_tcp_seg_connrst(net_pkt_iface(pkt));
 		}
 	}
 
 drop:
-	net_stats_update_per_proto_drop(proto);
+	net_stats_update_per_proto_drop(pkt_iface, proto);
 
 	return NET_DROP;
 }

@@ -14,14 +14,12 @@
 #include <autoconf.h>
 #include <linker/sections.h>
 
-#if defined(CONFIG_NSIM)
+#if defined(CONFIG_UART_NSIM)
 	EXTERN(_VectorTable)
 #endif
 
 #include <linker/linker-defs.h>
 #include <linker/linker-tool.h>
-
-#define KOBJECT_TEXT_AREA 256
 
 /* physical address of RAM */
 #ifdef CONFIG_HARVARD
@@ -37,6 +35,17 @@
 	#endif
 #endif
 
+#ifdef CONFIG_ARC_MPU_ENABLE
+	#if CONFIG_ARC_MPU_VER == 2
+		#define MPU_MIN_SIZE 2048
+	#elif CONFIG_ARC_MPU_VER == 3
+		#define MPU_MIN_SIZE 32
+	#endif
+	#define MPU_MIN_SIZE_ALIGN . = ALIGN(MPU_MIN_SIZE );
+#else
+	#define MPU_MIN_SIZE_ALIGN
+#endif
+
 #if defined(CONFIG_XIP)
 	#define _DATA_IN_ROM __data_rom_start
 #else
@@ -44,7 +53,7 @@
 #endif
 
 OUTPUT_ARCH(arc)
-ENTRY(__start)
+ENTRY(CONFIG_KERNEL_ENTRY)
 
 MEMORY {
 #ifdef FLASH_START
@@ -108,15 +117,43 @@ SECTIONS {
 	} GROUP_LINK_IN(ROMABLE_REGION)
 
 	_image_rodata_end = .;
+	MPU_MIN_SIZE_ALIGN
 	_image_rom_end = .;
+	_image_rom_size = _image_rom_end - _image_rom_start;
 
 	GROUP_END(ROMABLE_REGION)
 
 	GROUP_START(RAMABLE_REGION)
 
+#include <app_data_alignment.ld>
+
+#if defined(CONFIG_APP_SHARED_MEM)
+#if defined(CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT)
+#define APP_SHARED_ALIGN MPU_MIN_SIZE_ALIGN
+		#include <app_smem.ld>
+#else
+	SECTION_PROLOGUE(_APP_SMEM_SECTION_NAME, (OPTIONAL),)
+	{
+		MPU_MIN_SIZE_ALIGN
+		_image_ram_start = .;
+		_app_smem_start = .;
+		APP_SMEM_SECTION()
+		MPU_MIN_SIZE_ALIGN
+		_app_smem_end = .;
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+#endif  /* CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT */
+
+	_app_smem_size = _app_smem_end - _app_smem_start;
+	_app_smem_rom_start = LOADADDR(_APP_SMEM_SECTION_NAME);
+#endif /* CONFIG_APP_SHARED_MEM */
+
 #ifdef CONFIG_APPLICATION_MEMORY
 	SECTION_DATA_PROLOGUE(_APP_DATA_SECTION_NAME, (OPTIONAL),)
 	{
+		MPU_MIN_SIZE_ALIGN
+#include <app_data_alignment.ld>
+
 		__app_ram_start = .;
 		__app_data_ram_start = .;
 		_image_ram_start = .;
@@ -142,12 +179,23 @@ SECTIONS {
 	{
 		APP_INPUT_SECTION(.noinit)
 		APP_INPUT_SECTION(".noinit.*")
+
 	} GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
 
+	__app_last_address_used = .;
+
+	/* Pad out application ram area to make MPU friendly */
+	SECTION_PROLOGUE(app_pad, (NOLOAD OPTIONAL),)
+	{
+		. = ALIGN(_app_data_align);
+		MPU_MIN_SIZE_ALIGN
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
 	__app_ram_end = .;
+	__app_ram_size = __app_ram_end - __app_ram_start;
 #endif /* CONFIG_APPLICATION_MEMORY */
 
 	SECTION_DATA_PROLOGUE(_BSS_SECTION_NAME,(NOLOAD),) {
+		MPU_MIN_SIZE_ALIGN
 		/*
 		 * For performance, BSS section is assumed to be 4 byte aligned and
 		 * a multiple of 4 bytes
@@ -203,6 +251,8 @@ SECTIONS {
 #include <linker/kobject.ld>
 
 	__data_ram_end = .;
+
+	MPU_MIN_SIZE_ALIGN
 
 	/* Define linker symbols */
 	_image_ram_end = .;

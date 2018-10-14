@@ -27,18 +27,19 @@
 #include <version.h>
 #include <string.h>
 #include <misc/dlist.h>
+#include <kernel_internal.h>
+#include <kswap.h>
+#include <entropy.h>
+#include <logging/log_ctrl.h>
+#include <tracing.h>
+#include <stdbool.h>
 
-/* kernel build timestamp items */
-
-#define BUILD_TIMESTAMP "BUILD: " __DATE__ " " __TIME__
-
-#ifdef CONFIG_BUILD_TIMESTAMP
-const char * const build_timestamp = BUILD_TIMESTAMP;
-#endif
+#define IDLE_THREAD_NAME	"idle"
+#define LOG_LEVEL CONFIG_KERNEL_LOG_LEVEL
+#include <logging/log.h>
+LOG_MODULE_REGISTER(kernel);
 
 /* boot banner items */
-
-static const unsigned int boot_delay;
 #if defined(CONFIG_BOOT_DELAY) && CONFIG_BOOT_DELAY > 0
 #define BOOT_DELAY_BANNER " (delayed boot "	\
 	STRINGIFY(CONFIG_BOOT_DELAY) "ms)"
@@ -47,16 +48,19 @@ static const unsigned int boot_delay = CONFIG_BOOT_DELAY;
 #define BOOT_DELAY_BANNER ""
 static const unsigned int boot_delay;
 #endif
-#define BOOT_BANNER "BOOTING ZEPHYR OS v"	\
-	KERNEL_VERSION_STRING BOOT_DELAY_BANNER
+
+#ifdef BUILD_VERSION
+#define BOOT_BANNER "Booting Zephyr OS "	\
+	 STRINGIFY(BUILD_VERSION) BOOT_DELAY_BANNER
+#else
+#define BOOT_BANNER "Booting Zephyr OS "	\
+	 KERNEL_VERSION_STRING BOOT_DELAY_BANNER
+#endif
 
 #if !defined(CONFIG_BOOT_BANNER)
-#define PRINT_BOOT_BANNER() do { } while (0)
-#elif !defined(CONFIG_BUILD_TIMESTAMP)
-#define PRINT_BOOT_BANNER() printk("***** " BOOT_BANNER " *****\n")
+#define PRINT_BOOT_BANNER() do { } while (false)
 #else
-#define PRINT_BOOT_BANNER() \
-	printk("***** " BOOT_BANNER " - %s *****\n", build_timestamp)
+#define PRINT_BOOT_BANNER() printk("***** " BOOT_BANNER " *****\n")
 #endif
 
 /* boot time measurement items */
@@ -70,15 +74,6 @@ u64_t __noinit __idle_time_stamp;  /* timestamp when CPU goes idle */
 /* init/main and idle threads */
 
 #define IDLE_STACK_SIZE CONFIG_IDLE_STACK_SIZE
-
-#if CONFIG_MAIN_STACK_SIZE & (STACK_ALIGN - 1)
-    #error "MAIN_STACK_SIZE must be a multiple of the stack alignment"
-#endif
-
-#if IDLE_STACK_SIZE & (STACK_ALIGN - 1)
-    #error "IDLE_STACK_SIZE must be a multiple of the stack alignment"
-#endif
-
 #define MAIN_STACK_SIZE CONFIG_MAIN_STACK_SIZE
 
 K_THREAD_STACK_DEFINE(_main_stack, MAIN_STACK_SIZE);
@@ -98,37 +93,45 @@ k_tid_t const _idle_thread = (k_tid_t)&_idle_thread_s;
  * of this area is safe since interrupts are disabled until the kernel context
  * switches to the init thread.
  */
-#if CONFIG_ISR_STACK_SIZE & (STACK_ALIGN - 1)
-    #error "ISR_STACK_SIZE must be a multiple of the stack alignment"
-#endif
 K_THREAD_STACK_DEFINE(_interrupt_stack, CONFIG_ISR_STACK_SIZE);
+
+/*
+ * Similar idle thread & interrupt stack definitions for the
+ * auxiliary CPUs.  The declaration macros aren't set up to define an
+ * array, so do it with a simple test for up to 4 processors.  Should
+ * clean this up in the future.
+ */
+#if defined(CONFIG_SMP) && CONFIG_MP_NUM_CPUS > 1
+K_THREAD_STACK_DEFINE(_idle_stack1, IDLE_STACK_SIZE);
+static struct k_thread _idle_thread1_s;
+k_tid_t const _idle_thread1 = (k_tid_t)&_idle_thread1_s;
+K_THREAD_STACK_DEFINE(_interrupt_stack1, CONFIG_ISR_STACK_SIZE);
+#endif
+
+#if defined(CONFIG_SMP) && CONFIG_MP_NUM_CPUS > 2
+K_THREAD_STACK_DEFINE(_idle_stack2, IDLE_STACK_SIZE);
+static struct k_thread _idle_thread2_s;
+k_tid_t const _idle_thread2 = (k_tid_t)&_idle_thread2_s;
+K_THREAD_STACK_DEFINE(_interrupt_stack2, CONFIG_ISR_STACK_SIZE);
+#endif
+
+#if defined(CONFIG_SMP) && CONFIG_MP_NUM_CPUS > 3
+K_THREAD_STACK_DEFINE(_idle_stack3, IDLE_STACK_SIZE);
+static struct k_thread _idle_thread3_s;
+k_tid_t const _idle_thread3 = (k_tid_t)&_idle_thread3_s;
+K_THREAD_STACK_DEFINE(_interrupt_stack3, CONFIG_ISR_STACK_SIZE);
+#endif
 
 #ifdef CONFIG_SYS_CLOCK_EXISTS
 	#define initialize_timeouts() do { \
 		sys_dlist_init(&_timeout_q); \
-	} while ((0))
+	} while (false)
 #else
 	#define initialize_timeouts() do { } while ((0))
 #endif
 
 extern void idle(void *unused1, void *unused2, void *unused3);
 
-#if defined(CONFIG_INIT_STACKS) && defined(CONFIG_PRINTK)
-extern K_THREAD_STACK_DEFINE(sys_work_q_stack,
-			     CONFIG_SYSTEM_WORKQUEUE_STACK_SIZE);
-
-
-void k_call_stacks_analyze(void)
-{
-	printk("Kernel stacks:\n");
-	STACK_ANALYZE("main     ", _main_stack);
-	STACK_ANALYZE("idle     ", _idle_stack);
-	STACK_ANALYZE("interrupt", _interrupt_stack);
-	STACK_ANALYZE("workqueue", sys_work_q_stack);
-}
-#else
-void k_call_stacks_analyze(void) { }
-#endif
 
 /**
  *
@@ -140,11 +143,15 @@ void k_call_stacks_analyze(void) { }
  */
 void _bss_zero(void)
 {
-	memset(&__bss_start, 0,
-		 ((u32_t) &__bss_end - (u32_t) &__bss_start));
+	(void)memset(&__bss_start, 0,
+		     ((u32_t) &__bss_end - (u32_t) &__bss_start));
+#ifdef CONFIG_CCM_BASE_ADDRESS
+	(void)memset(&__ccm_bss_start, 0,
+		     ((u32_t) &__ccm_bss_end - (u32_t) &__ccm_bss_start));
+#endif
 #ifdef CONFIG_APPLICATION_MEMORY
-	memset(&__app_bss_start, 0,
-		 ((u32_t) &__app_bss_end - (u32_t) &__app_bss_start));
+	(void)memset(&__app_bss_start, 0,
+		     ((u32_t) &__app_bss_end - (u32_t) &__app_bss_start));
 #endif
 }
 
@@ -160,10 +167,18 @@ void _bss_zero(void)
  */
 void _data_copy(void)
 {
-	memcpy(&__data_ram_start, &__data_rom_start,
+	(void)memcpy(&__data_ram_start, &__data_rom_start,
 		 ((u32_t) &__data_ram_end - (u32_t) &__data_ram_start));
+#ifdef CONFIG_CCM_BASE_ADDRESS
+	(void)memcpy(&__ccm_data_start, &__ccm_data_rom_start,
+		 ((u32_t) &__ccm_data_end - (u32_t) &__ccm_data_start));
+#endif
+#ifdef CONFIG_APP_SHARED_MEM
+	(void)memcpy(&_app_smem_start, &_app_smem_rom_start,
+		 ((u32_t) &_app_smem_end - (u32_t) &_app_smem_start));
+#endif
 #ifdef CONFIG_APPLICATION_MEMORY
-	memcpy(&__app_data_ram_start, &__app_data_rom_start,
+	(void)memcpy(&__app_data_ram_start, &__app_data_rom_start,
 		 ((u32_t) &__app_data_ram_end - (u32_t) &__app_data_ram_start));
 #endif
 }
@@ -171,20 +186,23 @@ void _data_copy(void)
 
 /**
  *
- * @brief Mainline for kernel's background task
+ * @brief Mainline for kernel's background thread
  *
  * This routine completes kernel initialization by invoking the remaining
  * init functions, then invokes application's main() routine.
  *
  * @return N/A
  */
-static void _main(void *unused1, void *unused2, void *unused3)
+static void bg_thread_main(void *unused1, void *unused2, void *unused3)
 {
 	ARG_UNUSED(unused1);
 	ARG_UNUSED(unused2);
 	ARG_UNUSED(unused3);
 
 	_sys_device_do_config_level(_SYS_INIT_LEVEL_POST_KERNEL);
+#if CONFIG_STACK_POINTER_RANDOM
+	z_stack_adjust_initialized = 1;
+#endif
 	if (boot_delay > 0) {
 		printk("***** delaying boot " STRINGIFY(CONFIG_BOOT_DELAY)
 		       "ms (per build configuration) *****\n");
@@ -205,6 +223,9 @@ static void _main(void *unused1, void *unused2, void *unused3)
 
 	_init_static_threads();
 
+#ifdef CONFIG_SMP
+	smp_init();
+#endif
 
 #ifdef CONFIG_BOOT_TIME_MEASUREMENT
 	/* record timestamp for kernel's _main() function */
@@ -226,6 +247,20 @@ void __weak main(void)
 	/* NOP default main() if the application does not provide one. */
 }
 
+#if defined(CONFIG_MULTITHREADING)
+static void init_idle_thread(struct k_thread *thr, k_thread_stack_t *stack)
+{
+#ifdef CONFIG_SMP
+	thr->base.is_idle = 1;
+#endif
+
+	_setup_new_thread(thr, stack,
+			  IDLE_STACK_SIZE, idle, NULL, NULL, NULL,
+			  K_LOWEST_THREAD_PRIO, K_ESSENTIAL, IDLE_THREAD_NAME);
+	_mark_thread_as_started(thr);
+}
+#endif
+
 /**
  *
  * @brief Initializes kernel data structures
@@ -238,6 +273,7 @@ void __weak main(void)
  *
  * @return N/A
  */
+#ifdef CONFIG_MULTITHREADING
 static void prepare_multithreading(struct k_thread *dummy_thread)
 {
 #ifdef CONFIG_ARCH_HAS_CUSTOM_SWAP_TO_MAIN
@@ -265,23 +301,9 @@ static void prepare_multithreading(struct k_thread *dummy_thread)
 #endif
 
 	/* _kernel.ready_q is all zeroes */
+	_sched_init();
 
-	/*
-	 * The interrupt library needs to be initialized early since a series
-	 * of handlers are installed into the interrupt table to catch
-	 * spurious interrupts. This must be performed before other kernel
-	 * subsystems install bonafide handlers, or before hardware device
-	 * drivers are initialized.
-	 */
-
-	_IntLibInit();
-
-	/* ready the init/main and idle threads */
-
-	for (int ii = 0; ii < K_NUM_PRIORITIES; ii++) {
-		sys_dlist_init(&_ready_q.q[ii]);
-	}
-
+#ifndef CONFIG_SMP
 	/*
 	 * prime the cache with the main thread since:
 	 *
@@ -292,33 +314,56 @@ static void prepare_multithreading(struct k_thread *dummy_thread)
 	 *   to work as intended
 	 */
 	_ready_q.cache = _main_thread;
+#endif
 
 	_setup_new_thread(_main_thread, _main_stack,
-			  MAIN_STACK_SIZE, _main, NULL, NULL, NULL,
-			  CONFIG_MAIN_THREAD_PRIORITY, K_ESSENTIAL);
+			  MAIN_STACK_SIZE, bg_thread_main,
+			  NULL, NULL, NULL,
+			  CONFIG_MAIN_THREAD_PRIORITY, K_ESSENTIAL, "main");
+	sys_trace_thread_create(_main_thread);
+
 	_mark_thread_as_started(_main_thread);
-	_add_thread_to_ready_q(_main_thread);
+	_ready_thread(_main_thread);
 
 #ifdef CONFIG_MULTITHREADING
-	_setup_new_thread(_idle_thread, _idle_stack,
-			  IDLE_STACK_SIZE, idle, NULL, NULL, NULL,
-			  K_LOWEST_THREAD_PRIO, K_ESSENTIAL);
-	_mark_thread_as_started(_idle_thread);
-	_add_thread_to_ready_q(_idle_thread);
+	init_idle_thread(_idle_thread, _idle_stack);
+	_kernel.cpus[0].idle_thread = _idle_thread;
+	sys_trace_thread_create(_idle_thread);
+#endif
+
+#if defined(CONFIG_SMP) && CONFIG_MP_NUM_CPUS > 1
+	init_idle_thread(_idle_thread1, _idle_stack1);
+	_kernel.cpus[1].idle_thread = _idle_thread1;
+	_kernel.cpus[1].id = 1;
+	_kernel.cpus[1].irq_stack = K_THREAD_STACK_BUFFER(_interrupt_stack1)
+		+ CONFIG_ISR_STACK_SIZE;
+#endif
+
+#if defined(CONFIG_SMP) && CONFIG_MP_NUM_CPUS > 2
+	init_idle_thread(_idle_thread2, _idle_stack2);
+	_kernel.cpus[2].idle_thread = _idle_thread2;
+	_kernel.cpus[2].id = 2;
+	_kernel.cpus[2].irq_stack = K_THREAD_STACK_BUFFER(_interrupt_stack2)
+		+ CONFIG_ISR_STACK_SIZE;
+#endif
+
+#if defined(CONFIG_SMP) && CONFIG_MP_NUM_CPUS > 3
+	init_idle_thread(_idle_thread3, _idle_stack3);
+	_kernel.cpus[3].idle_thread = _idle_thread3;
+	_kernel.cpus[3].id = 3;
+	_kernel.cpus[3].irq_stack = K_THREAD_STACK_BUFFER(_interrupt_stack3)
+		+ CONFIG_ISR_STACK_SIZE;
 #endif
 
 	initialize_timeouts();
 
-	/* perform any architecture-specific initialization */
-
-	kernel_arch_init();
 }
 
 static void switch_to_main_thread(void)
 {
 #ifdef CONFIG_ARCH_HAS_CUSTOM_SWAP_TO_MAIN
 	_arch_switch_to_main_thread(_main_thread, _main_stack, MAIN_STACK_SIZE,
-				    _main);
+				    bg_thread_main);
 #else
 	/*
 	 * Context switch to main task (entry function is _main()): the
@@ -326,13 +371,54 @@ static void switch_to_main_thread(void)
 	 * will never be rescheduled in.
 	 */
 
-	_Swap(irq_lock());
+	(void)_Swap(irq_lock());
 #endif
+}
+#endif /* CONFIG_MULTITHREDING */
+
+u32_t z_early_boot_rand32_get(void)
+{
+#ifdef CONFIG_ENTROPY_HAS_DRIVER
+	struct device *entropy = device_get_binding(CONFIG_ENTROPY_NAME);
+	int rc;
+	u32_t retval;
+
+	if (entropy == NULL) {
+		goto sys_rand32_fallback;
+	}
+
+	/* Try to see if driver provides an ISR-specific API */
+	rc = entropy_get_entropy_isr(entropy, (u8_t *)&retval,
+				     sizeof(retval), ENTROPY_BUSYWAIT);
+	if (rc == -ENOTSUP) {
+		/* Driver does not provide an ISR-specific API, assume it can
+		 * be called from ISR context
+		 */
+		rc = entropy_get_entropy(entropy, (u8_t *)&retval,
+					 sizeof(retval));
+	}
+
+	if (rc >= 0) {
+		return retval;
+	}
+
+	/* Fall through to fallback */
+
+sys_rand32_fallback:
+#endif
+
+	/* FIXME: this assumes sys_rand32_get() won't use any synchronization
+	 * primitive, like semaphores or mutexes.  It's too early in the boot
+	 * process to use any of them.  Ideally, only the path where entropy
+	 * devices are available should be built, this is only a fallback for
+	 * those devices without a HWRNG entropy driver.
+	 */
+	return sys_rand32_get();
 }
 
 #ifdef CONFIG_STACK_CANARIES
-extern void *__stack_chk_guard;
-#endif
+extern uintptr_t __stack_chk_guard;
+#endif /* CONFIG_STACK_CANARIES */
 
 /**
  *
@@ -346,6 +432,7 @@ extern void *__stack_chk_guard;
  */
 FUNC_NORETURN void _Cstart(void)
 {
+#ifdef CONFIG_MULTITHREADING
 #ifdef CONFIG_ARCH_HAS_CUSTOM_SWAP_TO_MAIN
 	struct k_thread *dummy_thread = NULL;
 #else
@@ -354,28 +441,45 @@ FUNC_NORETURN void _Cstart(void)
 	 */
 	char dummy_thread_memory[sizeof(struct k_thread)];
 	struct k_thread *dummy_thread = (struct k_thread *)&dummy_thread_memory;
-#endif
 
+	(void)memset(dummy_thread_memory, 0, sizeof(dummy_thread_memory));
+#endif
+#endif
 	/*
-	 * Initialize kernel data structures. This step includes
-	 * initializing the interrupt subsystem, which must be performed
-	 * before the hardware initialization phase.
+	 * The interrupt library needs to be initialized early since a series
+	 * of handlers are installed into the interrupt table to catch
+	 * spurious interrupts. This must be performed before other kernel
+	 * subsystems install bonafide handlers, or before hardware device
+	 * drivers are initialized.
 	 */
 
-	prepare_multithreading(dummy_thread);
+	_IntLibInit();
+
+	if (IS_ENABLED(CONFIG_LOG)) {
+		log_core_init();
+	}
+
+	/* perform any architecture-specific initialization */
+	kernel_arch_init();
 
 	/* perform basic hardware initialization */
 	_sys_device_do_config_level(_SYS_INIT_LEVEL_PRE_KERNEL_1);
 	_sys_device_do_config_level(_SYS_INIT_LEVEL_PRE_KERNEL_2);
 
-	/* initialize stack canaries */
 #ifdef CONFIG_STACK_CANARIES
-	__stack_chk_guard = (void *)sys_rand32_get();
+	__stack_chk_guard = z_early_boot_rand32_get();
 #endif
 
-	/* display boot banner */
-
+#ifdef CONFIG_MULTITHREADING
+	prepare_multithreading(dummy_thread);
 	switch_to_main_thread();
+#else
+	bg_thread_main(NULL, NULL, NULL);
+
+	irq_lock();
+	while (true) {
+	}
+#endif
 
 	/*
 	 * Compiler can't tell that the above routines won't return and issues

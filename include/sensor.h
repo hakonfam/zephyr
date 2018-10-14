@@ -9,8 +9,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#ifndef __SENSOR_H__
-#define __SENSOR_H__
+#ifndef ZEPHYR_INCLUDE_SENSOR_H_
+#define ZEPHYR_INCLUDE_SENSOR_H_
 
 /**
  * @brief Sensor Interface
@@ -31,12 +31,19 @@ extern "C" {
  * @brief Representation of a sensor readout value.
  *
  * The value is represented as having an integer and a fractional part,
- * and can be obtained using the formula val1 + val2 * 10^(-6).
+ * and can be obtained using the formula val1 + val2 * 10^(-6). Negative
+ * values also adhere to the above formula, but may need special attention.
+ * Here are some examples of the value representation:
+ *
+ *      0.5: val1 =  0, val2 =  500000
+ *     -0.5: val1 =  0, val2 = -500000
+ *     -1.0: val1 = -1, val2 =  0
+ *     -1.5: val1 = -1, val2 = -500000
  */
 struct sensor_value {
 	/** Integer part of the value. */
 	s32_t val1;
-	/** Fractional part of the value. */
+	/** Fractional part of the value (in one-millionth parts). */
 	s32_t val2;
 };
 
@@ -89,8 +96,12 @@ enum sensor_channel {
 	 * Magnetic field on any axis.
 	 */
 	SENSOR_CHAN_MAGN_ANY = SENSOR_CHAN_MAGN_XYZ,
-	/** Temperature in degrees Celsius. */
+	/** Temperature in degrees Celsius. (deprecated) */
 	SENSOR_CHAN_TEMP,
+	/** Device die temperature in degrees Celsius. */
+	SENSOR_CHAN_DIE_TEMP,
+	/** Ambient temperature in degrees Celsius. */
+	SENSOR_CHAN_AMBIENT_TEMP,
 	/** Pressure in kilopascal. */
 	SENSOR_CHAN_PRESS,
 	/**
@@ -98,7 +109,7 @@ enum sensor_channel {
 	 * object is close.
 	 */
 	SENSOR_CHAN_PROX,
-	/** Humidity, in milli percent. */
+	/** Humidity, in percent. */
 	SENSOR_CHAN_HUMIDITY,
 	/** Illuminance in visible spectrum, in lux. */
 	SENSOR_CHAN_LIGHT,
@@ -119,8 +130,19 @@ enum sensor_channel {
 	SENSOR_CHAN_PM_2_5,
 	/** 10 micro-meters Particulate Matter, in ug/m^3 */
 	SENSOR_CHAN_PM_10,
-	/** Distance. From sensor to target, in millimeters */
+	/** Distance. From sensor to target, in meters */
 	SENSOR_CHAN_DISTANCE,
+
+	/** CO2 level, in parts per million (ppm) **/
+	SENSOR_CHAN_CO2,
+	/** VOC level, in parts per billion (ppb) **/
+	SENSOR_CHAN_VOC,
+
+	/** Voltage, in volts **/
+	SENSOR_CHAN_VOLTAGE,
+	/** Current, in amps **/
+	SENSOR_CHAN_CURRENT,
+
 	/** All channels. */
 	SENSOR_CHAN_ALL,
 };
@@ -504,4 +526,4 @@ static inline double sensor_value_to_double(struct sensor_value *val)
  * @}
  */
 
-#endif /* __SENSOR_H__ */
+#endif /* ZEPHYR_INCLUDE_SENSOR_H_ */

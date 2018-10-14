@@ -10,10 +10,12 @@
 #include <soc.h>
 #include <arch/arm/cortex_m/cmsis.h>
 #include <arch/arm/cortex_m/mpu/nxp_mpu.h>
-#include <logging/sys_log.h>
 #include <misc/__assert.h>
+#include <linker/linker-defs.h>
 
-#define STACK_GUARD_REGION_SIZE 32
+#define LOG_LEVEL CONFIG_MPU_LOG_LEVEL
+#include <logging/log.h>
+LOG_MODULE_DECLARE(mpu);
 
 /* NXP MPU Enabled state */
 static u8_t nxp_mpu_enabled;
@@ -25,11 +27,19 @@ static u8_t nxp_mpu_enabled;
 static inline u32_t _get_region_attr_by_type(u32_t type)
 {
 	switch (type) {
+#ifdef CONFIG_USERSPACE
 	case THREAD_STACK_REGION:
-		return 0;
+		return REGION_USER_MODE_ATTR;
+#endif
+#ifdef CONFIG_MPU_STACK_GUARD
 	case THREAD_STACK_GUARD_REGION:
 		/* The stack guard region has to be not accessible */
 		return REGION_RO_ATTR;
+#endif
+#ifdef CONFIG_APPLICATION_MEMORY
+	case THREAD_APP_DATA_REGION:
+		return REGION_USER_MODE_ATTR;
+#endif
 	default:
 		/* Size 0 region */
 		return 0;
@@ -39,6 +49,19 @@ static inline u32_t _get_region_attr_by_type(u32_t type)
 static inline u8_t _get_num_regions(void)
 {
 	return FSL_FEATURE_SYSMPU_DESCRIPTOR_COUNT;
+}
+
+static inline u8_t _get_num_usable_regions(void)
+{
+	u8_t max = _get_num_regions();
+#ifdef CONFIG_MPU_STACK_GUARD
+	/* Last region reserved for stack guard.
+	 * See comments in nxp_mpu_setup_sram_region()
+	 */
+	return max - 1;
+#else
+	return max;
+#endif
 }
 
 static void _region_init(u32_t index, u32_t region_base,
@@ -72,11 +95,11 @@ static void _region_init(u32_t index, u32_t region_base,
 		SYSMPU->WORD[index][3] = SYSMPU_WORD_VLD_MASK;
 	}
 
-	SYS_LOG_DBG("[%d] 0x%08x 0x%08x 0x%08x 0x%08x", index,
-		    SYSMPU->WORD[index][0],
-		    SYSMPU->WORD[index][1],
-		    SYSMPU->WORD[index][2],
-		    SYSMPU->WORD[index][3]);
+	LOG_DBG("[%d] 0x%08x 0x%08x 0x%08x 0x%08x", index,
+		    (u32_t)SYSMPU->WORD[index][0],
+		    (u32_t)SYSMPU->WORD[index][1],
+		    (u32_t)SYSMPU->WORD[index][2],
+		    (u32_t)SYSMPU->WORD[index][3]);
 }
 
 /**
@@ -85,35 +108,23 @@ static void _region_init(u32_t index, u32_t region_base,
  */
 static inline u32_t _get_region_index_by_type(u32_t type)
 {
-	/*
-	 * The new MPU regions are allocated per type after the statically
-	 * configured regions. The type is one-indexed rather than
-	 * zero-indexed, therefore we need to subtract by one to get the region
-	 * index.
-	 */
-	switch (type) {
-	case THREAD_STACK_REGION:
-		return mpu_config.num_regions + type - 1;
-	case THREAD_STACK_GUARD_REGION:
-		return mpu_config.num_regions + type - 1;
-	case THREAD_DOMAIN_PARTITION_REGION:
-#if defined(CONFIG_MPU_STACK_GUARD)
-		return mpu_config.num_regions + type - 1;
-#else
-		/*
-		 * Start domain partition region from stack guard region
-		 * since stack guard is not enabled.
-		 */
-		return mpu_config.num_regions + type - 2;
-#endif
-	default:
-		__ASSERT(0, "Unsupported type");
-		return 0;
-	}
+	u32_t region_index;
+
+	__ASSERT(type < THREAD_MPU_REGION_LAST,
+		 "unsupported region type");
+
+
+	region_index = mpu_config.num_regions + type;
+
+	__ASSERT(region_index < _get_num_usable_regions(),
+		 "out of MPU regions, requested %u max is %u",
+		 region_index, _get_num_usable_regions() - 1);
+
+	return region_index;
 }
 
 /**
- * This internal function check if region is enabled or not
+ * This internal function checks if region is enabled or not.
  */
 static inline int _is_enabled_region(u32_t r_index)
 {
@@ -121,7 +132,7 @@ static inline int _is_enabled_region(u32_t r_index)
 }
 
 /**
- * This internal function check if the given buffer in in the region
+ * This internal function checks if the given buffer is in the region.
  */
 static inline int _is_in_region(u32_t r_index, u32_t start, u32_t size)
 {
@@ -138,19 +149,45 @@ static inline int _is_in_region(u32_t r_index, u32_t start, u32_t size)
 	return 0;
 }
 
-/**
- * This internal function check if the region is user accessible or not
- */
-static inline int _is_user_accessible_region(u32_t r_index, int write)
+#ifdef CONFIG_MPU_STACK_GUARD
+static void nxp_mpu_setup_sram_region(u32_t base, u32_t size)
 {
-	u32_t r_ap = SYSMPU->WORD[r_index][2];
+	u32_t last_region = _get_num_regions() - 1;
 
-	if (write) {
-		return (r_ap & MPU_REGION_WRITE) == MPU_REGION_WRITE;
-	}
+	/*
+	 * The NXP MPU manages the permissions of the overlapping regions
+	 * doing the logical OR in between them, hence they can't be used
+	 * for stack/stack guard protection. For this reason the last region of
+	 * the MPU will be reserved.
+	 *
+	 * A consequence of this is that the SRAM is split in different
+	 * regions. In example if THREAD_STACK_GUARD_REGION is selected:
+	 * - SRAM before THREAD_STACK_GUARD_REGION: RW
+	 * - SRAM THREAD_STACK_GUARD_REGION: RO
+	 * - SRAM after THREAD_STACK_GUARD_REGION: RW
+	 */
 
-	return (r_ap & MPU_REGION_READ) == MPU_REGION_READ;
+	/* Configure SRAM_0 region
+	 *
+	 * The mpu_config.sram_region contains the index of the region in
+	 * the mpu_config.mpu_regions array but the region 0 on the NXP MPU
+	 * is the background region, so on this MPU the regions are mapped
+	 * starting from 1, hence the mpu_config.sram_region on the data
+	 * structure is mapped on the mpu_config.sram_region + 1 region of
+	 * the MPU.
+	 */
+	_region_init(mpu_config.sram_region,
+		     mpu_config.mpu_regions[mpu_config.sram_region].base,
+		     ENDADDR_ROUND(base),
+		     mpu_config.mpu_regions[mpu_config.sram_region].attr);
+
+	/* Configure SRAM_1 region */
+	_region_init(last_region, base + size,
+	   ENDADDR_ROUND(mpu_config.mpu_regions[mpu_config.sram_region].end),
+			mpu_config.mpu_regions[mpu_config.sram_region].attr);
+
 }
+#endif /* CONFIG_MPU_STACK_GUARD */
 
 /* ARM Core MPU Driver API Implementation for NXP MPU */
 
@@ -191,64 +228,32 @@ void arm_core_mpu_disable(void)
  */
 void arm_core_mpu_configure(u8_t type, u32_t base, u32_t size)
 {
-	SYS_LOG_DBG("Region info: 0x%x 0x%x", base, size);
+	LOG_DBG("Region info: 0x%x 0x%x", base, size);
 	u32_t region_index = _get_region_index_by_type(type);
 	u32_t region_attr = _get_region_attr_by_type(type);
-	u32_t last_region = _get_num_regions() - 1;
 
-	/*
-	 * The NXP MPU manages the permissions of the overlapping regions
-	 * doing the logic OR in between them, hence they can't be used
-	 * for stack/stack guard protection. For this reason the last region of
-	 * the MPU will be reserved.
-	 *
-	 * A consequence of this is that the SRAM is splitted in different
-	 * regions. In example if THREAD_STACK_GUARD_REGION is selected:
-	 * - SRAM before THREAD_STACK_GUARD_REGION: RW
-	 * - SRAM THREAD_STACK_GUARD_REGION: RO
-	 * - SRAM after THREAD_STACK_GUARD_REGION: RW
-	 */
-	/* NXP MPU supports up to 16 Regions */
-	if (region_index > _get_num_regions() - 2) {
-		return;
+	_region_init(region_index, base,
+		     ENDADDR_ROUND(base + size),
+		     region_attr);
+#ifdef CONFIG_MPU_STACK_GUARD
+	if (type == THREAD_STACK_GUARD_REGION) {
+		nxp_mpu_setup_sram_region(base, size);
 	}
-
-	/* Configure SRAM_0 region */
-	/*
-	 * The mpu_config.sram_region contains the index of the region in
-	 * the mpu_config.mpu_regions array but the region 0 on the NXP MPU
-	 * is the background region, so on this MPU the regions are mapped
-	 * starting from 1, hence the mpu_config.sram_region on the data
-	 * structure is mapped on the mpu_config.sram_region + 1 region of
-	 * the MPU.
-	 */
-	_region_init(mpu_config.sram_region,
-		     mpu_config.mpu_regions[mpu_config.sram_region].base,
-		     ENDADDR_ROUND(base),
-		     mpu_config.mpu_regions[mpu_config.sram_region].attr);
-
-	switch (type) {
-	case THREAD_STACK_REGION:
-		break;
-	case THREAD_STACK_GUARD_REGION:
-		_region_init(region_index, base,
-			     ENDADDR_ROUND(base + STACK_GUARD_REGION_SIZE),
-			     region_attr);
-		break;
-	default:
-		break;
-	}
-
-	/* Configure SRAM_1 region */
-	_region_init(last_region,
-		     base + STACK_GUARD_REGION_SIZE,
-		     ENDADDR_ROUND(
-			    mpu_config.mpu_regions[mpu_config.sram_region].end),
-		     mpu_config.mpu_regions[mpu_config.sram_region].attr);
-
+#endif
 }
 
 #if defined(CONFIG_USERSPACE)
+void arm_core_mpu_configure_user_context(struct k_thread *thread)
+{
+	u32_t base = (u32_t)thread->stack_info.start;
+	u32_t size = thread->stack_info.size;
+	u32_t index = _get_region_index_by_type(THREAD_STACK_REGION);
+	u32_t region_attr = _get_region_attr_by_type(THREAD_STACK_REGION);
+
+	/* configure stack */
+	_region_init(index, base, ENDADDR_ROUND(base + size), region_attr);
+}
+
 /**
  * @brief configure MPU regions for the memory partitions of the memory domain
  *
@@ -263,11 +268,11 @@ void arm_core_mpu_configure_mem_domain(struct k_mem_domain *mem_domain)
 	struct k_mem_partition *pparts;
 
 	if (mem_domain) {
-		SYS_LOG_DBG("configure domain: %p", mem_domain);
+		LOG_DBG("configure domain: %p", mem_domain);
 		num_partitions = mem_domain->num_partitions;
 		pparts = mem_domain->partitions;
 	} else {
-		SYS_LOG_DBG("disable domain partition regions");
+		LOG_DBG("disable domain partition regions");
 		num_partitions = 0;
 		pparts = NULL;
 	}
@@ -276,9 +281,9 @@ void arm_core_mpu_configure_mem_domain(struct k_mem_domain *mem_domain)
 	 * Don't touch the last region, it is reserved for SRAM_1 region.
 	 * See comments in arm_core_mpu_configure().
 	 */
-	for (; region_index < _get_num_regions() - 1; region_index++) {
+	for (; region_index < _get_num_usable_regions(); region_index++) {
 		if (num_partitions && pparts->size) {
-			SYS_LOG_DBG("set region 0x%x 0x%x 0x%x",
+			LOG_DBG("set region 0x%x 0x%x 0x%x",
 				    region_index, pparts->start, pparts->size);
 			region_attr = pparts->attr;
 			_region_init(region_index, pparts->start,
@@ -286,7 +291,7 @@ void arm_core_mpu_configure_mem_domain(struct k_mem_domain *mem_domain)
 				     region_attr);
 			num_partitions--;
 		} else {
-			SYS_LOG_DBG("disable region 0x%x", region_index);
+			LOG_DBG("disable region 0x%x", region_index);
 			/* Disable region */
 			SYSMPU->WORD[region_index][0] = 0;
 			SYSMPU->WORD[region_index][1] = 0;
@@ -310,17 +315,17 @@ void arm_core_mpu_configure_mem_partition(u32_t part_index,
 		_get_region_index_by_type(THREAD_DOMAIN_PARTITION_REGION);
 	u32_t region_attr;
 
-	SYS_LOG_DBG("configure partition index: %u", part_index);
+	LOG_DBG("configure partition index: %u", part_index);
 
 	if (part) {
-		SYS_LOG_DBG("set region 0x%x 0x%x 0x%x",
+		LOG_DBG("set region 0x%x 0x%x 0x%x",
 			    region_index + part_index, part->start, part->size);
 		region_attr = part->attr;
 		_region_init(region_index + part_index, part->start,
 			     ENDADDR_ROUND(part->start + part->size),
 			     region_attr);
 	} else {
-		SYS_LOG_DBG("disable region 0x%x", region_index);
+		LOG_DBG("disable region 0x%x", region_index);
 		/* Disable region */
 		SYSMPU->WORD[region_index + part_index][0] = 0;
 		SYSMPU->WORD[region_index + part_index][1] = 0;
@@ -339,7 +344,7 @@ void arm_core_mpu_mem_partition_remove(u32_t part_index)
 	u32_t region_index =
 		_get_region_index_by_type(THREAD_DOMAIN_PARTITION_REGION);
 
-	SYS_LOG_DBG("disable region 0x%x", region_index);
+	LOG_DBG("disable region 0x%x", region_index);
 	/* Disable region */
 	SYSMPU->WORD[region_index + part_index][0] = 0;
 	SYSMPU->WORD[region_index + part_index][1] = 0;
@@ -355,12 +360,29 @@ int arm_core_mpu_get_max_domain_partition_regions(void)
 	/*
 	 * Subtract the start of domain partition regions from total regions
 	 * should get the maximum number of free regions for memory domain
-	 * partitions. But we need to consume an extra 1 region to make
-	 * stack/stack guard protection work properly.
-	 * See the comments in arm_core_mpu_configure().
+	 * partitions
 	 */
-	return _get_num_regions() -
-		_get_region_index_by_type(THREAD_DOMAIN_PARTITION_REGION) - 1;
+	return _get_num_usable_regions() -
+		_get_region_index_by_type(THREAD_DOMAIN_PARTITION_REGION);
+}
+
+/**
+ * This internal function checks if the region is user accessible or not
+ */
+static inline int _is_user_accessible_region(u32_t r_index, int write)
+{
+	u32_t r_ap = SYSMPU->WORD[r_index][2];
+
+	/* always return true if this is the thread stack region */
+	if (_get_region_index_by_type(THREAD_STACK_REGION) == r_index) {
+		return 1;
+	}
+
+	if (write) {
+		return (r_ap & MPU_REGION_WRITE) == MPU_REGION_WRITE;
+	}
+
+	return (r_ap & MPU_REGION_READ) == MPU_REGION_READ;
 }
 
 /**
@@ -368,10 +390,10 @@ int arm_core_mpu_get_max_domain_partition_regions(void)
  */
 int arm_core_mpu_buffer_validate(void *addr, size_t size, int write)
 {
-	u32_t r_index;
+	u8_t r_index;
 
-	/* Iterate all mpu regions */
-	for (r_index = 0; r_index < _get_num_regions(); r_index++) {
+	/* Iterate all MPU regions */
+	for (r_index = 0; r_index < _get_num_usable_regions(); r_index++) {
 		if (!_is_enabled_region(r_index) ||
 		    !_is_in_region(r_index, (u32_t)addr, size)) {
 			continue;
@@ -403,12 +425,9 @@ static void _nxp_mpu_config(void)
 {
 	u32_t r_index;
 
-	SYS_LOG_DBG("region number: %d", _get_num_regions());
-
-	/* NXP MPU supports up to 16 Regions */
-	if (mpu_config.num_regions > _get_num_regions()) {
-		return;
-	}
+	__ASSERT(mpu_config.num_regions <= _get_num_regions(),
+		 "too many static MPU regions defined");
+	LOG_DBG("total region count: %d", _get_num_regions());
 
 	/* Disable MPU */
 	SYSMPU->CESR &= ~SYSMPU_CESR_VLD_MASK;
@@ -430,6 +449,23 @@ static void _nxp_mpu_config(void)
 
 	nxp_mpu_enabled = 1;
 
+#if defined(CONFIG_APPLICATION_MEMORY)
+	u32_t index, region_attr, base, size;
+
+	/* configure app data portion */
+	index = _get_region_index_by_type(THREAD_APP_DATA_REGION);
+	region_attr = _get_region_attr_by_type(THREAD_APP_DATA_REGION);
+	base = (u32_t)&__app_ram_start;
+	size = (u32_t)&__app_ram_end - (u32_t)&__app_ram_start;
+
+	/* set up app data region if exists, otherwise disable */
+	if (size > 0) {
+		_region_init(index, base, ENDADDR_ROUND(base + size),
+			     region_attr);
+	} else {
+		SYSMPU->WORD[index][3] = 0;
+	}
+#endif
 	/* Make sure that all the registers are set before proceeding */
 	__DSB();
 	__ISB();
@@ -458,7 +494,7 @@ static int nxp_mpu_init(struct device *arg)
 	return 0;
 }
 
-#if defined(CONFIG_SYS_LOG)
+#if defined(CONFIG_LOG)
 /* To have logging the driver needs to be initialized later */
 SYS_INIT(nxp_mpu_init, POST_KERNEL,
 	 CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);

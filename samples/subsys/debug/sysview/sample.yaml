@@ -1,6 +1,0 @@
-sample:
-  name: Systemview Demo
-tests:
-  test:
-    platform_whitelist: frdm_k64f
-    tags: apps debug

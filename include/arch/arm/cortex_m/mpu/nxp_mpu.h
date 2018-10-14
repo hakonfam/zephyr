@@ -3,8 +3,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#ifndef _NXP_MPU_H_
-#define _NXP_MPU_H_
+#ifndef ZEPHYR_INCLUDE_ARCH_ARM_CORTEX_M_MPU_NXP_MPU_H_
+#define ZEPHYR_INCLUDE_ARCH_ARM_CORTEX_M_MPU_NXP_MPU_H_
 
 #include <fsl_common.h>
 #include <arch/arm/cortex_m/mpu/arm_core_mpu_dev.h>
@@ -33,6 +33,15 @@
 #define BM1_SM_SHIFT	9
 #define BM2_SM_SHIFT	15
 #define BM3_SM_SHIFT	21
+
+#define BM4_WE_SHIFT	24
+#define BM4_RE_SHIFT	25
+
+#ifdef CONFIG_USB_KINETIS
+#define BM4_PERMISSIONS	((1 << BM4_RE_SHIFT) | (1 << BM4_WE_SHIFT))
+#else
+#define BM4_PERMISSIONS	0
+#endif
 
 /* Read Attribute */
 #define MPU_REGION_READ  ((UM_READ << BM0_UM_SHIFT) | \
@@ -76,21 +85,22 @@
 /* The ENDADDR field has the last 5 bit reserved and set to 1 */
 #define ENDADDR_ROUND(x) (x - 0x1F)
 
+#define REGION_USER_MODE_ATTR (MPU_REGION_READ | \
+				MPU_REGION_WRITE | \
+				MPU_REGION_SU)
+
 /* Some helper defines for common regions */
 #if defined(CONFIG_MPU_ALLOW_FLASH_WRITE)
-#define REGION_RAM_ATTR	  (MPU_REGION_READ | \
-			   MPU_REGION_WRITE | \
-			   MPU_REGION_EXEC | \
-			   MPU_REGION_SU)
+#define REGION_RAM_ATTR	  ((MPU_REGION_SU_RWX) | \
+			   ((UM_READ | UM_WRITE | UM_EXEC) << BM3_UM_SHIFT) | \
+			   (BM4_PERMISSIONS))
 
-#define REGION_FLASH_ATTR (MPU_REGION_READ | \
-			   MPU_REGION_WRITE | \
-			   MPU_REGION_EXEC | \
-			   MPU_REGION_SU)
+#define REGION_FLASH_ATTR (MPU_REGION_SU_RWX)
+
 #else
-#define REGION_RAM_ATTR	  (MPU_REGION_READ | \
-			   MPU_REGION_WRITE | \
-			   MPU_REGION_SU)
+#define REGION_RAM_ATTR	  ((MPU_REGION_SU_RW) | \
+			   ((UM_READ | UM_WRITE) << BM3_UM_SHIFT) | \
+			   (BM4_PERMISSIONS))
 
 #define REGION_FLASH_ATTR (MPU_REGION_READ | \
 			   MPU_REGION_EXEC | \
@@ -102,10 +112,14 @@
 			   MPU_REGION_EXEC | \
 			   MPU_REGION_SU)
 
-#define REGION_RO_ATTR	  (MPU_REGION_READ | \
-			   MPU_REGION_SU)
+#define REGION_RO_ATTR	  (MPU_REGION_READ | MPU_REGION_SU)
+
+#define REGION_USER_RO_ATTR (MPU_REGION_READ | \
+			     MPU_REGION_SU)
 
 #define REGION_DEBUG_ATTR  MPU_REGION_SU
+
+#define REGION_BACKGROUND_ATTR	MPU_REGION_SU_RW
 
 /* Region definition data structure */
 struct nxp_mpu_region {
@@ -140,4 +154,4 @@ struct nxp_mpu_config {
 /* Reference to the MPU configuration */
 extern struct nxp_mpu_config mpu_config;
 
-#endif /* _NXP_MPU_H_ */
+#endif /* ZEPHYR_INCLUDE_ARCH_ARM_CORTEX_M_MPU_NXP_MPU_H_ */

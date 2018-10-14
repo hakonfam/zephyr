@@ -37,20 +37,8 @@ struct tmp112_data {
 static int tmp112_reg_read(struct tmp112_data *drv_data,
 			   u8_t reg, u16_t *val)
 {
-	struct i2c_msg msgs[2] = {
-		{
-			.buf = &reg,
-			.len = 1,
-			.flags = I2C_MSG_WRITE | I2C_MSG_RESTART,
-		},
-		{
-			.buf = (u8_t *)val,
-			.len = 2,
-			.flags = I2C_MSG_READ | I2C_MSG_STOP,
-		},
-	};
-
-	if (i2c_transfer(drv_data->i2c, msgs, 2, TMP112_I2C_ADDRESS) < 0) {
+	if (i2c_burst_read(drv_data->i2c, TMP112_I2C_ADDRESS,
+			   reg, (u8_t *) val, 2) < 0) {
 		return -EIO;
 	}
 
@@ -62,10 +50,10 @@ static int tmp112_reg_read(struct tmp112_data *drv_data,
 static int tmp112_reg_write(struct tmp112_data *drv_data,
 			    u8_t reg, u16_t val)
 {
-	u8_t tx_buf[3] = {reg, val >> 8, val & 0xFF};
+	u16_t val_be = sys_cpu_to_be16(val);
 
-	return i2c_write(drv_data->i2c, tx_buf, sizeof(tx_buf),
-			 TMP112_I2C_ADDRESS);
+	return i2c_burst_write(drv_data->i2c, TMP112_I2C_ADDRESS,
+			       reg, (u8_t *)&val_be, 2);
 }
 
 static int tmp112_reg_update(struct tmp112_data *drv_data, u8_t reg,
@@ -93,7 +81,7 @@ static int tmp112_attr_set(struct device *dev,
 	s64_t value;
 	u16_t cr;
 
-	if (chan != SENSOR_CHAN_TEMP) {
+	if (chan != SENSOR_CHAN_AMBIENT_TEMP) {
 		return -ENOTSUP;
 	}
 
@@ -165,7 +153,7 @@ static int tmp112_sample_fetch(struct device *dev, enum sensor_channel chan)
 	struct tmp112_data *drv_data = dev->driver_data;
 	u16_t val;
 
-	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL || chan == SENSOR_CHAN_TEMP);
+	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL || chan == SENSOR_CHAN_AMBIENT_TEMP);
 
 	if (tmp112_reg_read(drv_data, TMP112_REG_TEMPERATURE, &val) < 0) {
 		return -EIO;
@@ -187,7 +175,7 @@ static int tmp112_channel_get(struct device *dev,
 	struct tmp112_data *drv_data = dev->driver_data;
 	s32_t uval;
 
-	if (chan != SENSOR_CHAN_TEMP) {
+	if (chan != SENSOR_CHAN_AMBIENT_TEMP) {
 		return -ENOTSUP;
 	}
 

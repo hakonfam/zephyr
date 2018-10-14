@@ -18,8 +18,9 @@
 #include <watchdog.h>
 #include <soc.h>
 
-#define SYS_LOG_DOMAIN "dev/wdt_sam"
-#include <logging/sys_log.h>
+#define LOG_LEVEL CONFIG_WDT_LOG_LEVEL
+#include <logging/log.h>
+LOG_MODULE_REGISTER(wdt_sam);
 
 /* Device constant configuration parameters */
 struct wdt_sam_dev_cfg {
@@ -33,14 +34,16 @@ static void wdt_sam_enable(struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-	SYS_LOG_ERR("Function not implemented!");
+	LOG_ERR("Function not implemented!");
 }
 
-static void wdt_sam_disable(struct device *dev)
+static int wdt_sam_disable(struct device *dev)
 {
 	Wdt *const wdt = DEV_CFG(dev)->regs;
 
 	wdt->WDT_MR |= WDT_MR_WDDIS;
+
+	return 0;
 }
 
 static int wdt_sam_set_config(struct device *dev, struct wdt_config *config)
@@ -48,7 +51,7 @@ static int wdt_sam_set_config(struct device *dev, struct wdt_config *config)
 	ARG_UNUSED(dev);
 	ARG_UNUSED(config);
 
-	SYS_LOG_ERR("Function not implemented!");
+	LOG_ERR("Function not implemented!");
 
 	return -ENOTSUP;
 }
@@ -58,14 +61,14 @@ static void wdt_sam_get_config(struct device *dev, struct wdt_config *config)
 	ARG_UNUSED(dev);
 	ARG_UNUSED(config);
 
-	SYS_LOG_ERR("Function not implemented!");
+	LOG_ERR("Function not implemented!");
 }
 
 static void wdt_sam_reload(struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-	SYS_LOG_ERR("Function not implemented!");
+	LOG_ERR("Function not implemented!");
 }
 
 static const struct wdt_driver_api wdt_sam_api = {
@@ -88,7 +91,7 @@ static const struct wdt_sam_dev_cfg wdt_sam_config = {
 	.regs = WDT
 };
 
-DEVICE_AND_API_INIT(wdt_sam, CONFIG_WDT_SAM_DEVICE_NAME, wdt_sam_init,
+DEVICE_AND_API_INIT(wdt_sam, CONFIG_WDT_0_NAME, wdt_sam_init,
 		    NULL, &wdt_sam_config,
 		    PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
 		    &wdt_sam_api);

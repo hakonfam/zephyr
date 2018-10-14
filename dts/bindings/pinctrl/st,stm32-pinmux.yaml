@@ -1,6 +1,5 @@
 ---
 title: STM32 PINMUX
-id: st,stm32-pinmux
 version: 0.1
 
 description: >
@@ -12,14 +11,13 @@ properties:
       category: required
       description: compatible strings
       constraint: "st,stm32-pinmux"
+      generation: define
 
     reg:
       type: int
       description: mmio register space
       generation: define
       category: required
-
-cell_string: PINMUX
 
 "#cells":
   - pin

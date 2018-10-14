@@ -4,10 +4,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * Minimal configuration for TLS 1.1 (RFC 4346) for Zephyr, implementing only
- * the required ciphersuite: MBEDTLS_TLS_RSA_WITH_3DES_EDE_CBC_SHA
- *
- * See README.txt for usage instructions.
+ * Minimal configuration for TLS 1.2 (RFC 5246) for Zephyr, implementing only
+ * a few of the most popular ciphersuites.
  */
 
 #ifndef MBEDTLS_CONFIG_H
@@ -22,6 +20,7 @@
 #define MBEDTLS_NO_PLATFORM_ENTROPY
 #define MBEDTLS_NO_DEFAULT_ENTROPY_SOURCES
 #define MBEDTLS_PLATFORM_PRINTF_ALT
+#define MBEDTLS_PLATFORM_SNPRINTF_ALT
 
 #if !defined(CONFIG_ARM)
 #define MBEDTLS_HAVE_ASM
@@ -74,13 +73,7 @@
 #define MBEDTLS_SSL_ALL_ALERT_MESSAGES
 #endif
 
-#if defined(CONFIG_MQTT_LIB_TLS)
-#define MBEDTLS_SSL_MAX_CONTENT_LEN  2500
-#elif defined(CONFIG_HTTPS)
-#define MBEDTLS_SSL_MAX_CONTENT_LEN  2500
-#else
-#define MBEDTLS_SSL_MAX_CONTENT_LEN  1500
-#endif
+#define MBEDTLS_SSL_MAX_CONTENT_LEN  CONFIG_MBEDTLS_SSL_MAX_CONTENT_LEN
 
 #include "mbedtls/check_config.h"
 

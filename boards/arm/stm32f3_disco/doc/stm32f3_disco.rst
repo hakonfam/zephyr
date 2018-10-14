@@ -90,6 +90,10 @@ features:
 +-----------+------------+-------------------------------------+
 | I2C       | on-chip    | i2c                                 |
 +-----------+------------+-------------------------------------+
+| SPI       | on-chip    | spi                                 |
++-----------+------------+-------------------------------------+
+| USB       | on-chip    | USB device                          |
++-----------+------------+-------------------------------------+
 
 Other hardware features are not yet supported on Zephyr porting.
 
@@ -116,6 +120,16 @@ Default Zephyr Peripheral Mapping:
 - I2C1_SDA : PB7
 - I2C2_SCL : PA9
 - I2C2_SDA : PA10
+- SPI1_NSS : PA4
+- SPI1_SCK : PA5
+- SPI1_MISO : PA6
+- SPI1_MOSI : PA7
+- SPI2_NSS : PB12
+- SPI2_SCK : PB13
+- SPI2_MISO : PB14
+- SPI2_MOSI : PB15
+- USB_DM : PA11
+- USB_DP : PA12
 - USER_PB : PA0
 - LD3 : PE9
 - LD4 : PE8
@@ -145,6 +159,11 @@ I2C
 STM32F3DISCOVERY has up to 2 I2Cs. I2C1 is connected to the LSM303DLHC and is
 an ultra-compact low-power system-in-package featuring a 3D digital linear
 acceleration sensor and a 3D digital magnetic sensor.
+
+USB
+===
+STM32F3DISCOVERY has a USB 2.0 full-speed device interface available through
+its mini USB connector (USB USER).
 
 Programming and Debugging
 *************************

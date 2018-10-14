@@ -37,6 +37,7 @@
  */
 
 #include <misc/printk.h>
+#include <settings/settings.h>
 #include <misc/byteorder.h>
 #include <nrf.h>
 #include <device.h>
@@ -49,8 +50,6 @@
 #include <stdio.h>
 
 #include <board.h>
-
-#define CID_INTEL 0x0002
 
 /*
  * The include must follow the define for it to take effect.
@@ -126,8 +125,6 @@ static struct bt_mesh_health_srv health_srv = {
  * The publication messages are initialized to the
  * the size of the opcode + content
  *
- * The messages are in static storage because NET_BUF_SIMPLE()
- * only allocates on the stack if called within a function.
  * For publication, the message must be in static or global as
  * it is re-transmitted several times. This occurs
  * after the function that called bt_mesh_model_publish() has
@@ -139,34 +136,16 @@ static struct bt_mesh_health_srv health_srv = {
  *
  */
 
-static struct bt_mesh_model_pub health_pub = {
-	.msg  = BT_MESH_HEALTH_FAULT_MSG(0),
-};
+BT_MESH_HEALTH_PUB_DEFINE(health_pub, 0);
 
-static struct bt_mesh_model_pub gen_onoff_pub_srv = {
-	.msg = NET_BUF_SIMPLE(2 + 2),
-};
-static struct bt_mesh_model_pub gen_onoff_pub_cli = {
-	.msg = NET_BUF_SIMPLE(2 + 2),
-};
-static struct bt_mesh_model_pub gen_onoff_pub_srv_s_0 = {
-	.msg = NET_BUF_SIMPLE(2 + 2),
-};
-static struct bt_mesh_model_pub gen_onoff_pub_cli_s_0 = {
-	.msg = NET_BUF_SIMPLE(2 + 2),
-};
-static struct bt_mesh_model_pub gen_onoff_pub_srv_s_1 = {
-	.msg = NET_BUF_SIMPLE(2 + 2),
-};
-static struct bt_mesh_model_pub gen_onoff_pub_cli_s_1 = {
-	.msg = NET_BUF_SIMPLE(2 + 2),
-};
-static struct bt_mesh_model_pub gen_onoff_pub_srv_s_2 = {
-	.msg = NET_BUF_SIMPLE(2 + 2),
-};
-static struct bt_mesh_model_pub gen_onoff_pub_cli_s_2 = {
-	.msg = NET_BUF_SIMPLE(2 + 2),
-};
+BT_MESH_MODEL_PUB_DEFINE(gen_onoff_pub_srv, NULL, 2 + 2);
+BT_MESH_MODEL_PUB_DEFINE(gen_onoff_pub_cli, NULL, 2 + 2);
+BT_MESH_MODEL_PUB_DEFINE(gen_onoff_pub_srv_s_0, NULL, 2 + 2);
+BT_MESH_MODEL_PUB_DEFINE(gen_onoff_pub_cli_s_0, NULL, 2 + 2);
+BT_MESH_MODEL_PUB_DEFINE(gen_onoff_pub_srv_s_1, NULL, 2 + 2);
+BT_MESH_MODEL_PUB_DEFINE(gen_onoff_pub_cli_s_1, NULL, 2 + 2);
+BT_MESH_MODEL_PUB_DEFINE(gen_onoff_pub_srv_s_2, NULL, 2 + 2);
+BT_MESH_MODEL_PUB_DEFINE(gen_onoff_pub_cli_s_2, NULL, 2 + 2);
 
 /*
  * Models in an element must have unique op codes.
@@ -301,7 +280,7 @@ static struct bt_mesh_elem elements[] = {
 };
 
 static const struct bt_mesh_comp comp = {
-	.cid = CID_INTEL,
+	.cid = BT_COMP_ID_LF,
 	.elem = elements,
 	.elem_count = ARRAY_SIZE(elements),
 };
@@ -337,15 +316,15 @@ static void gen_onoff_get(struct bt_mesh_model *model,
 			  struct bt_mesh_msg_ctx *ctx,
 			  struct net_buf_simple *buf)
 {
-	struct net_buf_simple *msg = NET_BUF_SIMPLE(2 + 1 + 4);
+	NET_BUF_SIMPLE_DEFINE(msg, 2 + 1 + 4);
 	struct onoff_state *onoff_state = model->user_data;
 
 	SYS_LOG_INF("addr 0x%04x onoff 0x%02x",
-		    model->elem->addr, onoff_state->current);
-	bt_mesh_model_msg_init(msg, BT_MESH_MODEL_OP_GEN_ONOFF_STATUS);
-	net_buf_simple_add_u8(msg, onoff_state->current);
+		    bt_mesh_model_elem(model)->addr, onoff_state->current);
+	bt_mesh_model_msg_init(&msg, BT_MESH_MODEL_OP_GEN_ONOFF_STATUS);
+	net_buf_simple_add_u8(&msg, onoff_state->current);
 
-	if (bt_mesh_model_send(model, ctx, msg, NULL, NULL)) {
+	if (bt_mesh_model_send(model, ctx, &msg, NULL, NULL)) {
 		SYS_LOG_ERR("Unable to send On Off Status response");
 	}
 }
@@ -360,7 +339,7 @@ static void gen_onoff_set_unack(struct bt_mesh_model *model,
 
 	onoff_state->current = net_buf_simple_pull_u8(buf);
 	SYS_LOG_INF("addr 0x%02x state 0x%02x",
-		    model->elem->addr, onoff_state->current);
+		    bt_mesh_model_elem(model)->addr, onoff_state->current);
 
 	/* Pin set low turns on LED's on the nrf52840-pca10056 board */
 	gpio_pin_write(onoff_state->led_device,
@@ -411,10 +390,10 @@ static void gen_onoff_status(struct bt_mesh_model *model,
 	state = net_buf_simple_pull_u8(buf);
 
 	SYS_LOG_INF("Node 0x%04x OnOff status from 0x%04x with state 0x%02x",
-		    model->elem->addr, ctx->addr, state);
+		    bt_mesh_model_elem(model)->addr, ctx->addr, state);
 }
 
-static int output_number(bt_mesh_output_action_t action, uint32_t number)
+static int output_number(bt_mesh_output_action_t action, u32_t number)
 {
 	SYS_LOG_INF("OOB Number %u", number);
 	return 0;
@@ -462,7 +441,7 @@ static uint8_t pin_to_sw(uint32_t pin_pos)
 }
 
 static void button_pressed(struct device *dev, struct gpio_callback *cb,
-			   uint32_t pin_pos)
+			   u32_t pin_pos)
 {
 	/*
 	 * One button press within a 1 second interval sends an on message
@@ -536,7 +515,7 @@ static void button_pressed_worker(struct k_work *work)
 	 */
 
 	if (primary_addr == BT_MESH_ADDR_UNASSIGNED) {
-		struct net_buf_simple *msg = NET_BUF_SIMPLE(1);
+		NET_BUF_SIMPLE_DEFINE(msg, 1);
 		struct bt_mesh_msg_ctx ctx = {
 			.addr = sw_idx + primary_addr,
 		};
@@ -545,9 +524,8 @@ static void button_pressed_worker(struct k_work *work)
 		 * for the led server
 		 */
 
-		net_buf_simple_init(msg, 0);
-		net_buf_simple_add_u8(msg, sw->onoff_state);
-		gen_onoff_set_unack(mod_srv, &ctx, msg);
+		net_buf_simple_add_u8(&msg, sw->onoff_state);
+		gen_onoff_set_unack(mod_srv, &ctx, &msg);
 		return;
 	}
 
@@ -600,17 +578,21 @@ static void bt_ready(int err)
 
 	SYS_LOG_INF("Bluetooth initialized");
 
-	/* Use identity address as device UUID */
-	if (bt_le_oob_get_local(&oob)) {
-		SYS_LOG_ERR("Identity Address unavailable");
-	} else {
-		memcpy(dev_uuid, oob.addr.a.val, 6);
-	}
-
 	err = bt_mesh_init(&prov, &comp);
 	if (err) {
 		SYS_LOG_ERR("Initializing mesh failed (err %d)", err);
 		return;
+	}
+
+	if (IS_ENABLED(CONFIG_SETTINGS)) {
+		settings_load();
+	}
+
+	/* Use identity address as device UUID */
+	if (bt_le_oob_get_local(BT_ID_DEFAULT, &oob)) {
+		SYS_LOG_ERR("Identity Address unavailable");
+	} else {
+		memcpy(dev_uuid, oob.addr.a.val, 6);
 	}
 
 	bt_mesh_prov_enable(BT_MESH_PROV_GATT | BT_MESH_PROV_ADV);
@@ -661,7 +643,7 @@ void main(void)
 	/* Initialize button count timer */
 	k_timer_init(&sw.button_timer, button_cnt_timer, NULL);
 
-	sw_device = device_get_binding(SW0_GPIO_NAME);
+	sw_device = device_get_binding(SW0_GPIO_CONTROLLER);
 	gpio_pin_configure(sw_device, SW0_GPIO_PIN,
 			  (GPIO_DIR_IN | GPIO_INT | GPIO_INT_EDGE |
 			   GPIO_INT_ACTIVE_LOW | GPIO_PUD_PULL_UP));
@@ -684,10 +666,10 @@ void main(void)
 	gpio_pin_enable_callback(sw_device, SW3_GPIO_PIN);
 
 	/* Initialize LED's */
-	init_led(0, LED0_GPIO_PORT, LED0_GPIO_PIN);
-	init_led(1, LED1_GPIO_PORT, LED1_GPIO_PIN);
-	init_led(2, LED2_GPIO_PORT, LED2_GPIO_PIN);
-	init_led(3, LED3_GPIO_PORT, LED3_GPIO_PIN);
+	init_led(0, LED0_GPIO_CONTROLLER, LED0_GPIO_PIN);
+	init_led(1, LED1_GPIO_CONTROLLER, LED1_GPIO_PIN);
+	init_led(2, LED2_GPIO_CONTROLLER, LED2_GPIO_PIN);
+	init_led(3, LED3_GPIO_CONTROLLER, LED3_GPIO_PIN);
 
 	/* Initialize the Bluetooth Subsystem */
 	err = bt_enable(bt_ready);

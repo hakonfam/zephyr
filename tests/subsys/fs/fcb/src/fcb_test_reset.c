@@ -39,7 +39,8 @@ void fcb_test_reset(void)
 	for (i = 0; i < sizeof(test_data); i++) {
 		test_data[i] = fcb_test_append_data(32, i);
 	}
-	rc = flash_area_write(loc.fe_area, loc.fe_data_off, test_data, 32);
+	rc = flash_area_write(fcb->fap, FCB_ENTRY_FA_DATA_OFF(loc), test_data,
+			      32);
 	zassert_true(rc == 0, "flash_area_write call failure");
 
 	rc = fcb_append_finish(fcb, &loc);
@@ -57,11 +58,11 @@ void fcb_test_reset(void)
 	/*
 	 * Pretend reset
 	 */
-	memset(fcb, 0, sizeof(*fcb));
+	(void)memset(fcb, 0, sizeof(*fcb));
 	fcb->f_sector_cnt = 2;
-	fcb->f_sectors = test_fcb_area;
+	fcb->f_sectors = test_fcb_sector;
 
-	rc = fcb_init(fcb);
+	rc = fcb_init(TEST_FCB_FLASH_AREA_ID, fcb);
 	zassert_true(rc == 0, "fcb_init call failure");
 
 	var_cnt = 32;
@@ -76,7 +77,8 @@ void fcb_test_reset(void)
 	for (i = 0; i < sizeof(test_data); i++) {
 		test_data[i] = fcb_test_append_data(33, i);
 	}
-	rc = flash_area_write(loc.fe_area, loc.fe_data_off, test_data, 33);
+	rc = flash_area_write(fcb->fap, FCB_ENTRY_FA_DATA_OFF(loc), test_data,
+			      33);
 	zassert_true(rc == 0, "flash_area_write call failure");
 
 	rc = fcb_append_finish(fcb, &loc);
@@ -94,11 +96,11 @@ void fcb_test_reset(void)
 	rc = fcb_append(fcb, 34, &loc);
 	zassert_true(rc == 0, "fcb_append call failure");
 
-	memset(fcb, 0, sizeof(*fcb));
+	(void)memset(fcb, 0, sizeof(*fcb));
 	fcb->f_sector_cnt = 2;
-	fcb->f_sectors = test_fcb_area;
+	fcb->f_sectors = test_fcb_sector;
 
-	rc = fcb_init(fcb);
+	rc = fcb_init(TEST_FCB_FLASH_AREA_ID, fcb);
 	zassert_true(rc == 0, "fcb_init call failure");
 
 	/*
@@ -117,7 +119,8 @@ void fcb_test_reset(void)
 	for (i = 0; i < sizeof(test_data); i++) {
 		test_data[i] = fcb_test_append_data(34, i);
 	}
-	rc = flash_area_write(loc.fe_area, loc.fe_data_off, test_data, 34);
+	rc = flash_area_write(fcb->fap, FCB_ENTRY_FA_DATA_OFF(loc), test_data,
+			      34);
 	zassert_true(rc == 0, "flash_area_write call failure");
 
 	rc = fcb_append_finish(fcb, &loc);

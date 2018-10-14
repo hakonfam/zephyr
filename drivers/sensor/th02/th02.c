@@ -85,7 +85,7 @@ static int th02_sample_fetch(struct device *dev, enum sensor_channel chan)
 {
 	struct th02_data *drv_data = dev->driver_data;
 
-	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL || chan == SENSOR_CHAN_TEMP);
+	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL || chan == SENSOR_CHAN_AMBIENT_TEMP);
 
 	drv_data->t_sample = get_temp(drv_data->i2c);
 	SYS_LOG_INF("temp: %u", drv_data->t_sample);
@@ -100,10 +100,10 @@ static int th02_channel_get(struct device *dev, enum sensor_channel chan,
 {
 	struct th02_data *drv_data = dev->driver_data;
 
-	__ASSERT_NO_MSG(chan == SENSOR_CHAN_TEMP ||
+	__ASSERT_NO_MSG(chan == SENSOR_CHAN_AMBIENT_TEMP ||
 			chan == SENSOR_CHAN_HUMIDITY);
 
-	if (chan == SENSOR_CHAN_TEMP) {
+	if (chan == SENSOR_CHAN_AMBIENT_TEMP) {
 		/* val = sample / 32 - 50 */
 		val->val1 = drv_data->t_sample / 32 - 50;
 		val->val2 = (drv_data->t_sample % 32) * (1000000 / 32);
@@ -132,12 +132,11 @@ static int th02_init(struct device *dev)
 		return -EINVAL;
 	}
 
-	dev->driver_api = &th02_driver_api;
-
 	return 0;
 }
 
 static struct th02_data th02_driver;
 
-DEVICE_INIT(th02, CONFIG_TH02_NAME, th02_init, &th02_driver,
-	    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY);
+DEVICE_AND_API_INIT(th02, CONFIG_TH02_NAME, th02_init, &th02_driver,
+		    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
+		    &th02_driver_api);

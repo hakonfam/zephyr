@@ -113,22 +113,22 @@ SECTION_FUNC(TEXT, _NanoIdleValClear)
  */
 
 SECTION_FUNC(TEXT, k_cpu_idle)
-#ifdef CONFIG_KERNEL_EVENT_LOGGER_SLEEP
+#ifdef CONFIG_TRACING
 	push {lr}
-	bl    _sys_k_event_logger_enter_sleep
+	bl    z_sys_trace_idle
 	pop {r0}
 	mov lr, r0
 #endif
 
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
 	cpsie i
-#elif defined(CONFIG_ARMV7_M)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
 	/* clear BASEPRI so wfi is awakened by incoming interrupts */
 	eors.n r0, r0
 	msr BASEPRI, r0
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 
 	wfi
 
@@ -147,19 +147,19 @@ SECTION_FUNC(TEXT, k_cpu_idle)
  *    if this requirement is not met.
  *
  * 2) After waking up from the low-power mode, the interrupt lockout state
- *    must be restored as indicated in the 'imask' input parameter.
+ *    must be restored as indicated in the 'key' input parameter.
  *
  * @return N/A
  *
  * C function prototype:
  *
- * void k_cpu_atomic_idle (unsigned int imask);
+ * void k_cpu_atomic_idle (unsigned int key);
  */
 
 SECTION_FUNC(TEXT, k_cpu_atomic_idle)
-#ifdef CONFIG_KERNEL_EVENT_LOGGER_SLEEP
+#ifdef CONFIG_TRACING
 	push {lr}
-	bl    _sys_k_event_logger_enter_sleep
+	bl    z_sys_trace_idle
 	pop {r1}
 	mov lr, r1
 #endif
@@ -177,7 +177,7 @@ SECTION_FUNC(TEXT, k_cpu_atomic_idle)
 
 	/* r0: interrupt mask from caller */
 
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
 	/* No BASEPRI, call wfe directly (SEVONPEND set in _CpuIdleInit()) */
 	wfe
 
@@ -186,7 +186,7 @@ SECTION_FUNC(TEXT, k_cpu_atomic_idle)
 	cpsie i
 _irq_disabled:
 
-#elif defined(CONFIG_ARMV7_M)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
 	/* r1: zero, for setting BASEPRI (needs a register) */
 	eors.n r1, r1
 
@@ -199,5 +199,5 @@ _irq_disabled:
 	cpsie i
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M  */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 	bx lr

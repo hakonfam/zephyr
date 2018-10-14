@@ -8,8 +8,8 @@
 
 /* Either public functions or macros or invoked by public functions */
 
-#ifndef _ASM_INLINE_GCC_PUBLIC_GCC_H
-#define _ASM_INLINE_GCC_PUBLIC_GCC_H
+#ifndef ZEPHYR_INCLUDE_ARCH_ARM_CORTEX_M_ASM_INLINE_GCC_H_
+#define ZEPHYR_INCLUDE_ARCH_ARM_CORTEX_M_ASM_INLINE_GCC_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -118,13 +118,13 @@ static ALWAYS_INLINE unsigned int _arch_irq_lock(void)
 {
 	unsigned int key;
 
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
 	__asm__ volatile("mrs %0, PRIMASK;"
 		"cpsid i"
 		: "=r" (key)
 		:
 		: "memory");
-#elif defined(CONFIG_ARMV7_M)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
 	unsigned int tmp;
 
 	__asm__ volatile(
@@ -136,7 +136,7 @@ static ALWAYS_INLINE unsigned int _arch_irq_lock(void)
 		: "memory");
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 
 	return key;
 }
@@ -163,16 +163,16 @@ static ALWAYS_INLINE unsigned int _arch_irq_lock(void)
 
 static ALWAYS_INLINE void _arch_irq_unlock(unsigned int key)
 {
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
 	if (key) {
 		return;
 	}
 	__asm__ volatile("cpsie i" : : : "memory");
-#elif defined(CONFIG_ARMV7_M)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
 	__asm__ volatile("msr BASEPRI, %0" :  : "r"(key) : "memory");
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 }
 
 
@@ -182,4 +182,4 @@ static ALWAYS_INLINE void _arch_irq_unlock(unsigned int key)
 }
 #endif
 
-#endif /* _ASM_INLINE_GCC_PUBLIC_GCC_H */
+#endif /* ZEPHYR_INCLUDE_ARCH_ARM_CORTEX_M_ASM_INLINE_GCC_H_ */

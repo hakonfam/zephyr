@@ -1,6 +1,6 @@
 /dts-v1/;
 
-#include <ti/msp432p4xx.dtsi>
+#include <ti/msp432p401r.dtsi>
 
 / {
 	model = "TI MSP-EXP432P401R LaunchXL";
@@ -8,7 +8,7 @@
 						"ti,msp432p4xx";
 
 	aliases {
-		uart_0 = &uart0;
+		uart-0 = &uart0;
 	};
 
 	chosen {

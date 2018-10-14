@@ -47,12 +47,8 @@ SECTION_FUNC(TEXT, _isr_wrapper)
 	bl read_timer_start_of_isr
 #endif
 
-#ifdef CONFIG_KERNEL_EVENT_LOGGER_INTERRUPT
-	bl _sys_k_event_logger_interrupt
-#endif
-
-#ifdef CONFIG_KERNEL_EVENT_LOGGER_SLEEP
-	bl _sys_k_event_logger_exit_sleep
+#ifdef CONFIG_TRACING
+	bl z_sys_trace_isr_enter
 #endif
 
 #ifdef CONFIG_SYS_POWER_MANAGEMENT
@@ -72,7 +68,7 @@ SECTION_FUNC(TEXT, _isr_wrapper)
 	ldr r0, [r2, #_kernel_offset_to_idle]
 	cmp r0, #0
 
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
 	beq _idle_state_cleared
 	movs.n r1, #0
 	/* clear kernel idle state */
@@ -80,7 +76,7 @@ SECTION_FUNC(TEXT, _isr_wrapper)
 	blx _sys_power_save_idle_exit
 _idle_state_cleared:
 
-#elif defined(CONFIG_ARMV7_M)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
 	ittt ne
 	movne	r1, #0
 		/* clear kernel idle state */
@@ -88,22 +84,22 @@ _idle_state_cleared:
 		blxne	_sys_power_save_idle_exit
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 
 	cpsie i		/* re-enable interrupts (PRIMASK = 0) */
 #endif
 
 	mrs r0, IPSR	/* get exception number */
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
 	ldr r1, =16
 	subs r0, r1	/* get IRQ number */
 	lsls r0, #3	/* table is 8-byte wide */
-#elif defined(CONFIG_ARMV7_M)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
 	sub r0, r0, #16	/* get IRQ number */
 	lsl r0, r0, #3	/* table is 8-byte wide */
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 	ldr r1, =_sw_isr_table
 	add r1, r1, r0	/* table entry: ISRs must have their MSB set to stay
 			 * in thumb mode */
@@ -113,24 +109,24 @@ _idle_state_cleared:
 	stm sp!,{r0-r3} /* Save r0 to r4 into stack */
 	push {lr}
 	bl read_timer_end_of_isr
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
 	pop {r3}
 	mov lr,r3
 #else
 	pop {lr}
-#endif
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 	ldm sp!,{r0-r3} /* Restore r0 to r4 regs */
 #endif
 	blx r3		/* call ISR */
 
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
 	pop {r3}
 	mov lr, r3
-#elif defined(CONFIG_ARMV7_M)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
 	pop {lr}
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 
 	/* exception return is done in _IntExit() */
 	b _IntExit

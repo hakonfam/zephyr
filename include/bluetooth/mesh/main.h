@@ -7,8 +7,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#ifndef __BT_MESH_MAIN_H
-#define __BT_MESH_MAIN_H
+#ifndef ZEPHYR_INCLUDE_BLUETOOTH_MESH_MAIN_H_
+#define ZEPHYR_INCLUDE_BLUETOOTH_MESH_MAIN_H_
 
 /**
  * @brief Bluetooth Mesh Provisioning
@@ -39,10 +39,36 @@ typedef enum {
 	BT_MESH_PROV_GATT  = BIT(1),
 } bt_mesh_prov_bearer_t;
 
+typedef enum {
+	BT_MESH_PROV_OOB_OTHER     = BIT(0),
+	BT_MESH_PROV_OOB_URI       = BIT(1),
+	BT_MESH_PROV_OOB_2D_CODE   = BIT(2),
+	BT_MESH_PROV_OOB_BAR_CODE  = BIT(3),
+	BT_MESH_PROV_OOB_NFC       = BIT(4),
+	BT_MESH_PROV_OOB_NUMBER    = BIT(5),
+	BT_MESH_PROV_OOB_STRING    = BIT(6),
+	/* 7 - 10 are reserved */
+	BT_MESH_PROV_OOB_ON_BOX    = BIT(11),
+	BT_MESH_PROV_OOB_IN_BOX    = BIT(12),
+	BT_MESH_PROV_OOB_ON_PAPER  = BIT(13),
+	BT_MESH_PROV_OOB_IN_MANUAL = BIT(14),
+	BT_MESH_PROV_OOB_ON_DEV    = BIT(15),
+} bt_mesh_prov_oob_info_t;
+
 /** Provisioning properties & capabilities. */
 struct bt_mesh_prov {
 	/** The UUID that's used when advertising as unprovisioned */
 	const u8_t *uuid;
+
+	/** Optional URI. This will be advertised separately from the
+	 *  unprovisioned beacon, however the unprovisioned beacon will
+	 *  contain a hash of it so the two can be associated by the
+	 *  provisioner.
+	 */
+	const char *uri;
+
+	/** Out of Band information field. */
+	bt_mesh_prov_oob_info_t oob_info;
 
 	/** Static OOB value */
 	const u8_t *static_val;
@@ -259,15 +285,25 @@ void bt_mesh_reset(void);
  *  @param net_idx  Network Key Index
  *  @param flags    Provisioning Flags
  *  @param iv_index IV Index
- *  @param seq      Sequence Number (0 if newly provisioned).
  *  @param addr     Primary element address
  *  @param dev_key  Device Key
  *
  *  @return Zero on success or (negative) error code otherwise.
  */
 int bt_mesh_provision(const u8_t net_key[16], u16_t net_idx,
-		      u8_t flags, u32_t iv_index, u32_t seq,
-		      u16_t addr, const u8_t dev_key[16]);
+		      u8_t flags, u32_t iv_index, u16_t addr,
+		      const u8_t dev_key[16]);
+
+/** @brief Check if the local node has been provisioned.
+ *
+ *  This API can be used to check if the local node has been provisioned
+ *  or not. It can e.g. be helpful to determine if there was a stored
+ *  network in flash, i.e. if the network was restored after calling
+ *  settings_load().
+ *
+ *  @return True if the node is provisioned. False otherwise.
+ */
+bool bt_mesh_is_provisioned(void);
 
 /** @brief Toggle the IV Update test mode
  *
@@ -324,4 +360,4 @@ void bt_mesh_lpn_set_cb(void (*cb)(u16_t friend_addr, bool established));
  * @}
  */
 
-#endif /* __BT_MESH_MAIN_H */
+#endif /* ZEPHYR_INCLUDE_BLUETOOTH_MESH_MAIN_H_ */

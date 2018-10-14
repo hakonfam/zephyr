@@ -69,7 +69,7 @@
    */
 #define __STM32L4xx_HAL_VERSION_MAIN   (0x01) /*!< [31:24] main version */
 #define __STM32L4xx_HAL_VERSION_SUB1   (0x08) /*!< [23:16] sub1 version */
-#define __STM32L4xx_HAL_VERSION_SUB2   (0x01) /*!< [15:8]  sub2 version */
+#define __STM32L4xx_HAL_VERSION_SUB2   (0x03) /*!< [15:8]  sub2 version */
 #define __STM32L4xx_HAL_VERSION_RC     (0x00) /*!< [7:0]  release candidate */
 #define __STM32L4xx_HAL_VERSION         ((__STM32L4xx_HAL_VERSION_MAIN << 24)\
                                         |(__STM32L4xx_HAL_VERSION_SUB1 << 16)\
@@ -139,17 +139,17 @@ __IO uint32_t uwTick;
 
 /**
   * @brief  Configure the Flash prefetch, the Instruction and Data caches,
-  *         the time base source, NVIC and any required global low level hardware 
-  *         by calling the HAL_MspInit() callback function to be optionally defined in user file 
+  *         the time base source, NVIC and any required global low level hardware
+  *         by calling the HAL_MspInit() callback function to be optionally defined in user file
   *         stm32l4xx_hal_msp.c.
   *
-  * @note   HAL_Init() function is called at the beginning of program after reset and before 
+  * @note   HAL_Init() function is called at the beginning of program after reset and before
   *         the clock configuration.
-  *             
+  *
   * @note   In the default implementation the System Timer (Systick) is used as source of time base.
   *         The Systick configuration is based on MSI clock, as MSI is the clock
   *         used after a system Reset and the NVIC configuration is set to Priority group 4.
-  *         Once done, time base tick starts incrementing: the tick variable counter is incremented 
+  *         Once done, time base tick starts incrementing: the tick variable counter is incremented
   *         each 1ms in the SysTick_Handler() interrupt handler.
   *
   * @retval HAL status
@@ -316,8 +316,8 @@ __weak uint32_t HAL_GetTick(void)
 }
 
 /**
-  * @brief This function provides minimum delay (in milliseconds) based 
-  *        on variable incremented. 
+  * @brief This function provides minimum delay (in milliseconds) based
+  *        on variable incremented.
   * @note In the default implementation , SysTick timer is the source of time base.
   *       It is used to generate interrupts at regular time intervals where uwTick
   *       is incremented.
@@ -335,7 +335,7 @@ __weak void HAL_Delay(uint32_t Delay)
   if (wait < HAL_MAX_DELAY)
   {
     wait++;
-  } 
+  }
 
   while((HAL_GetTick() - tickstart) < wait)
   {
@@ -575,9 +575,9 @@ void HAL_SYSCFG_DisableMemorySwappingBank(void)
   * @brief Configure the internal voltage reference buffer voltage scale.
   * @param VoltageScaling  specifies the output voltage to achieve
   *          This parameter can be one of the following values:
-  *            @arg SYSCFG_VREFBUF_VOLTAGE_SCALE0: VREF_OUT1 around 2.048 V. 
+  *            @arg SYSCFG_VREFBUF_VOLTAGE_SCALE0: VREF_OUT1 around 2.048 V.
   *                                                This requires VDDA equal to or higher than 2.4 V.
-  *            @arg SYSCFG_VREFBUF_VOLTAGE_SCALE1: VREF_OUT2 around 2.5 V. 
+  *            @arg SYSCFG_VREFBUF_VOLTAGE_SCALE1: VREF_OUT2 around 2.5 V.
   *                                                This requires VDDA equal to or higher than 2.8 V.
   * @retval None
   */
@@ -585,7 +585,7 @@ void HAL_SYSCFG_VREFBUF_VoltageScalingConfig(uint32_t VoltageScaling)
 {
   /* Check the parameters */
   assert_param(IS_SYSCFG_VREFBUF_VOLTAGE_SCALE(VoltageScaling));
-  
+
   MODIFY_REG(VREFBUF->CSR, VREFBUF_CSR_VRS, VoltageScaling);
 }
 
@@ -601,7 +601,7 @@ void HAL_SYSCFG_VREFBUF_HighImpedanceConfig(uint32_t Mode)
 {
   /* Check the parameters */
   assert_param(IS_SYSCFG_VREFBUF_HIGH_IMPEDANCE(Mode));
-  
+
   MODIFY_REG(VREFBUF->CSR, VREFBUF_CSR_HIZ, Mode);
 }
 
@@ -613,7 +613,7 @@ void HAL_SYSCFG_VREFBUF_TrimmingConfig(uint32_t TrimmingValue)
 {
   /* Check the parameters */
   assert_param(IS_SYSCFG_VREFBUF_TRIMMING(TrimmingValue));
-  
+
   MODIFY_REG(VREFBUF->CCR, VREFBUF_CCR_TRIM, TrimmingValue);
 }
 
@@ -624,9 +624,9 @@ void HAL_SYSCFG_VREFBUF_TrimmingConfig(uint32_t TrimmingValue)
 HAL_StatusTypeDef HAL_SYSCFG_EnableVREFBUF(void)
 {
   uint32_t  tickstart = 0;
-  
+
   SET_BIT(VREFBUF->CSR, VREFBUF_CSR_ENVR);
-  
+
   /* Get Start Tick*/
   tickstart = HAL_GetTick();
 
@@ -638,7 +638,7 @@ HAL_StatusTypeDef HAL_SYSCFG_EnableVREFBUF(void)
       return HAL_TIMEOUT;
     }
   }
-  
+
   return HAL_OK;
 }
 

@@ -2,7 +2,7 @@ zephyr_library()
 zephyr_library_sources(libc-hooks.c)
 
 # LIBC_*_DIR may or may not have been set by the toolchain. E.g. when
-# using ZEPHYR_GCC_VARIANT=cross-compile it will be either up to the
+# using ZEPHYR_TOOLCHAIN_VARIANT=cross-compile it will be either up to the
 # toolchain to know where it's libc implementation is, or if it is
 # unable to, it will be up to the user to specify LIBC_*_DIR vars to
 # point to a newlib implementation.
@@ -14,6 +14,10 @@ endif()
 if(LIBC_LIBRARY_DIR)
   set(LIBC_LIBRARY_DIR_FLAG -L${LIBC_LIBRARY_DIR})
 endif()
+
+# define __LINUX_ERRNO_EXTENSIONS__ so we get errno defines like -ESHUTDOWN
+# used by the network stack
+zephyr_compile_definitions(__LINUX_ERRNO_EXTENSIONS__)
 
 zephyr_link_libraries(
   m

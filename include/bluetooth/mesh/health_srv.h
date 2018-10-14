@@ -7,8 +7,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#ifndef __BT_MESH_HEALTH_SRV_H
-#define __BT_MESH_HEALTH_SRV_H
+#ifndef ZEPHYR_INCLUDE_BLUETOOTH_MESH_HEALTH_SRV_H_
+#define ZEPHYR_INCLUDE_BLUETOOTH_MESH_HEALTH_SRV_H_
 
 /**
  * @brief Bluetooth Mesh Health Server Model
@@ -42,16 +42,15 @@ struct bt_mesh_health_srv_cb {
 	void (*attn_off)(struct bt_mesh_model *model);
 };
 
-/** @def BT_MESH_HEALTH_FAULT_MSG
+/** @def BT_MESH_HEALTH_PUB_DEFINE
  *
- *  A helper to define a health fault message.
+ *  A helper to define a health publication context
  *
- *  @param max_faults Maximum number of faults the element can have.
- *
- *  @return a New net_buf_simple of the needed size.
+ *  @param _name Name given to the publication context variable.
+ *  @param _max_faults Maximum number of faults the element can have.
  */
-#define BT_MESH_HEALTH_FAULT_MSG(max_faults) \
-	NET_BUF_SIMPLE(1 + 3 + (max_faults))
+#define BT_MESH_HEALTH_PUB_DEFINE(_name, _max_faults) \
+	BT_MESH_MODEL_PUB_DEFINE(_name, NULL, (1 + 3 + (_max_faults)))
 
 /** Mesh Health Server Model Context */
 struct bt_mesh_health_srv {
@@ -88,4 +87,4 @@ extern const struct bt_mesh_model_op bt_mesh_health_srv_op[];
  * @}
  */
 
-#endif /* __BT_MESH_HEALTH_SRV_H */
+#endif /* ZEPHYR_INCLUDE_BLUETOOTH_MESH_HEALTH_SRV_H_ */

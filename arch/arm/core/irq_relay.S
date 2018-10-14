@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 Ding Tao
+ * Copyright (c) 2018 Ding Tao <miyatsu@qq.com>
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -7,15 +7,16 @@
 /**
  * @file irq_relay.S
  *
- * @brief IRQ relay vector table and relay handler for Cortex-M0 SoC
+ * @brief IRQ relay vector table and relay handler for Cortex-M0 or
+ *        Armv8-M baseline SoCs
  *
- * In Cortex-M0, the vector table address can not be changed. Once the
- * vector table is occupied by bootloader, there will be no IRQ support
- * in chainloaded image.
+ * In certain ARMv6-M and Armv8-M baseline cores the vector table address can
+ * not be changed. Once the * vector table is occupied by bootloader, there
+ * will be no IRQ support in the chainloaded image.
  *
  * This program will link into bootloader, once an interrupt is coming,
- * bootloader can forward the interrupt to the chainloaded image. This
- * will support DFU on Cortex-M0 plantform.
+ * the bootloader can forward the interrupt to the chainloaded image. This
+ * will support DFU on those cores.
  *
  * Note: Currently support mcuboot only.
  * */
@@ -33,13 +34,13 @@ GDATA(_vector_table_pointer)
 GDATA(_main_stack)
 
 SECTION_FUNC(vector_relay_handler, __vector_relay_handler)
-	mrs		r0, ipsr;
+	mrs	r0, ipsr;
 	lsls	r0, r0, $0x02;
 
-	ldr		r1, = _vector_table_pointer;
-	ldr		r1, [r1];
+	ldr	r1, =_vector_table_pointer;
+	ldr	r1, [r1];
 	adds	r1, r1, r0;
-	ldr		r1, [r1];
+	ldr	r1, [r1];
 
 	/**
 	 * The size of IRQ vector is 4 bytes, the offset within vector table
@@ -48,7 +49,7 @@ SECTION_FUNC(vector_relay_handler, __vector_relay_handler)
 	 * be the real irq handle vector.
 	 * */
 
-	bx		r1;
+	bx	r1;
 
 GTEXT(__vector_relay_handler)
 

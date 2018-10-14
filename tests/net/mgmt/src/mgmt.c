@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define LOG_MODULE_NAME net_test
+#define NET_LOG_LEVEL CONFIG_NET_MGMT_EVENT_LOG_LEVEL
+
 #include <zephyr.h>
 #include <tc_util.h>
 #include <errno.h>
@@ -17,6 +20,7 @@
 #define TEST_MGMT_REQUEST		0x17AB1234
 #define TEST_MGMT_EVENT			0x97AB1234
 #define TEST_MGMT_EVENT_UNHANDLED	0x97AB4321
+#define TEST_MGMT_EVENT_INFO_SIZE	sizeof("mgmt event info")
 
 /* Notifier infra */
 static u32_t event2throw;
@@ -35,7 +39,7 @@ static struct net_mgmt_event_callback rx_cb;
 static struct in6_addr addr6 = { { { 0xfe, 0x80, 0, 0, 0, 0, 0, 0,
 				     0, 0, 0, 0, 0, 0, 0, 0x1 } } };
 
-static char info_data[CONFIG_NET_MGMT_EVENT_INFO_SIZE] = "mgmt event info";
+static char info_data[TEST_MGMT_EVENT_INFO_SIZE] = "mgmt event info";
 
 static int test_mgmt_request(u32_t mgmt_request,
 			     struct net_if *iface, void *data, u32_t len)
@@ -64,7 +68,7 @@ int fake_dev_init(struct device *dev)
 
 static void fake_iface_init(struct net_if *iface)
 {
-	u8_t mac[8] = { 0x00, 0x00, 0x00, 0x00, 0x0a, 0x0b, 0x0c, 0x0d};
+	static u8_t mac[8] = { 0x00, 0x00, 0x00, 0x00, 0x0a, 0x0b, 0x0c, 0x0d};
 
 	net_if_set_link_addr(iface, mac, 8, NET_LINK_DUMMY);
 }
@@ -110,7 +114,7 @@ static void thrower_thread(void)
 				net_mgmt_event_notify_with_info(
 					event2throw, net_if_get_default(),
 					info_data,
-					CONFIG_NET_MGMT_EVENT_INFO_SIZE);
+					TEST_MGMT_EVENT_INFO_SIZE);
 			} else {
 				net_mgmt_event_notify(event2throw,
 						      net_if_get_default());
@@ -127,7 +131,7 @@ static void receiver_cb(struct net_mgmt_event_callback *cb,
 
 	if (with_info && cb->info) {
 		if (memcmp(info_data, cb->info,
-			   CONFIG_NET_MGMT_EVENT_INFO_SIZE)) {
+			   TEST_MGMT_EVENT_INFO_SIZE)) {
 			rx_calls = (u32_t) -1;
 			return;
 		}

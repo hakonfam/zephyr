@@ -213,7 +213,7 @@ static void bmg160_to_fixed_point(struct bmg160_device_data *bmg160,
 				  enum sensor_channel chan, s16_t raw,
 				  struct sensor_value *val)
 {
-	if (chan == SENSOR_CHAN_TEMP) {
+	if (chan == SENSOR_CHAN_DIE_TEMP) {
 		val->val1 = 23 + (raw / 2);
 		val->val2 = (raw % 2) * 500000;
 	} else {
@@ -248,7 +248,7 @@ static int bmg160_channel_get(struct device *dev, enum sensor_channel chan,
 
 		return 0;
 
-	case SENSOR_CHAN_TEMP:
+	case SENSOR_CHAN_DIE_TEMP:
 		bmg160_to_fixed_point(bmg160, chan, bmg160->raw_temp, val);
 		return 0;
 
@@ -321,8 +321,6 @@ int bmg160_init(struct device *dev)
 	bmg160_trigger_init(dev);
 #endif
 
-	dev->driver_api = &bmg160_api;
-
 	return 0;
 }
 
@@ -336,5 +334,6 @@ const struct bmg160_device_config bmg160_config = {
 #endif
 };
 
-DEVICE_INIT(bmg160, CONFIG_BMG160_DRV_NAME, bmg160_init, &bmg160_data,
-	    &bmg160_config, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY);
+DEVICE_AND_API_INIT(bmg160, CONFIG_BMG160_DRV_NAME, bmg160_init, &bmg160_data,
+		    &bmg160_config, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
+		    &bmg160_api);

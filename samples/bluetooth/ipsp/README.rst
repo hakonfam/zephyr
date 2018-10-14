@@ -18,8 +18,8 @@ Zephyr tree.
 Testing with a Linux host
 =========================
 
-To test IPSP please take a look at samples/net/README, in addition to running
-echo-client you must enable 6LowPAN module in Linux with the following commands
+Make sure the Linux kernel has been built with Bluetooth 6LoWPAN module
+(CONFIG_BT_6LOWPAN=y) then proceed to enable it with with the following commands
 (as root):
 
 .. code-block:: console
@@ -185,4 +185,4 @@ test both TCP and UDP echo, you can use Zephyr's helper tool in the GitHub
 .. note::
 
    For hosts using kernels released before 4.12 CONFIG_NET_L2_BT_ZEP1656
-   shall be selected: https://jira.zephyrproject.org/browse/ZEP-1656
+   shall be selected: https://github.com/zephyrproject-rtos/zephyr/issues/3111

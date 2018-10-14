@@ -11,11 +11,11 @@
  * Network loopback interface implementation.
  */
 
-#define SYS_LOG_DOMAIN "netlo"
-#define SYS_LOG_LEVEL CONFIG_SYS_LOG_NETLO_LEVEL
-#include <logging/sys_log.h>
+#define LOG_MODULE_NAME netlo
+#define LOG_LEVEL CONFIG_NET_LOOPBACK_LOG_LEVEL
 
-#include <misc/printk.h>
+#include <logging/log.h>
+LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 
 #include <net/net_pkt.h>
 #include <net/buf.h>
@@ -40,7 +40,7 @@ static int loopback_send(struct net_if *iface, struct net_pkt *pkt)
 	int res;
 
 	if (!pkt->frags) {
-		SYS_LOG_ERR("No data to send");
+		LOG_ERR("No data to send");
 		return -ENODATA;
 	}
 
@@ -69,7 +69,7 @@ static int loopback_send(struct net_if *iface, struct net_pkt *pkt)
 	 * must be dropped. This is very much needed for TCP packets where
 	 * the packet is reference counted in various stages of sending.
 	 */
-	cloned = net_pkt_clone(pkt, MSEC(100));
+	cloned = net_pkt_clone(pkt, K_MSEC(100));
 	if (!cloned) {
 		res = -ENOMEM;
 		goto out;
@@ -77,13 +77,13 @@ static int loopback_send(struct net_if *iface, struct net_pkt *pkt)
 
 	res = net_recv_data(iface, cloned);
 	if (res < 0) {
-		SYS_LOG_ERR("Data receive failed.");
+		LOG_ERR("Data receive failed.");
 		goto out;
 	}
 
-out:
 	net_pkt_unref(pkt);
 
+out:
 	/* Let the receiving thread run now */
 	k_yield();
 

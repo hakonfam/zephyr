@@ -220,10 +220,7 @@ void _timer_int_handler(void *unused)
 	read_timer_start_of_tick_handler();
 #endif
 
-#ifdef CONFIG_KERNEL_EVENT_LOGGER_INTERRUPT
-	extern void _sys_k_event_logger_interrupt(void);
-	_sys_k_event_logger_interrupt();
-#endif
+	sys_trace_isr_enter();
 
 #ifdef CONFIG_SYS_POWER_MANAGEMENT
 	s32_t numIdleTicks;
@@ -681,6 +678,8 @@ void _timer_idle_exit(void)
 		}
 	}
 
+	clock_accumulated_count += default_load_value * _sys_idle_elapsed_ticks;
+
 	idle_mode = IDLE_NOT_TICKLESS;
 	sysTickStart();
 #endif
@@ -753,7 +752,27 @@ return (u32_t) get_elapsed_count();
 
 	do {
 		cac = clock_accumulated_count;
+#ifdef CONFIG_TICKLESS_IDLE
+		/* When we leave a tickless period the reload value of the timer
+		 * can be set to a remaining value to wait until end of tick.
+		 * (see _timer_idle_exit). The remaining value is always smaller
+		 * than default_load_value. In this case the time elapsed until
+		 * the timer restart was not yet added to
+		 * clock_accumulated_count. To retrieve a correct cycle count
+		 * we must therefore consider the number of cycle since current
+		 * tick period start and not only the cycle number since
+		 * the timer restart.
+		 */
+		if (SysTick->LOAD < default_load_value)	{
+			count = default_load_value;
+		} else {
+			count = SysTick->LOAD;
+		}
+		count -= SysTick->VAL;
+#else
 		count = SysTick->LOAD - SysTick->VAL;
+#endif
+		__ISB();
 	} while (cac != clock_accumulated_count);
 
 	return cac + count;

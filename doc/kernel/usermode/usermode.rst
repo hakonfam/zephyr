@@ -188,3 +188,6 @@ for execution after the kernel starts:
     kernelobjects.rst
     syscalls.rst
     memory_domain.rst
+    mpu_stack_objects.rst
+    mpu_userspace.rst
+    usermode_sharedmem.rst

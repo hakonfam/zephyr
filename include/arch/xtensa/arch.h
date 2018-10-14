@@ -10,8 +10,8 @@
  * by the generic kernel interface header (include/arch/cpu.h)
  */
 
-#ifndef _ARCH_IFACE_H
-#define _ARCH_IFACE_H
+#ifndef ZEPHYR_INCLUDE_ARCH_XTENSA_ARCH_H_
+#define ZEPHYR_INCLUDE_ARCH_XTENSA_ARCH_H_
 
 #include <irq.h>
 
@@ -19,6 +19,7 @@
 extern "C" {
 #endif
 
+#include <generated_dts_board.h>
 #if !defined(_ASMLANGUAGE) && !defined(__ASSEMBLER__)
 #include "sys_io.h" /* Include from the very same folder of this file */
 #include <zephyr/types.h>
@@ -27,8 +28,6 @@ extern "C" {
 #include <xtensa/config/core.h>
 
 #define STACK_ALIGN 16
-#define OCTET_TO_SIZEOFUNIT(X) (X)
-#define SIZEOFUNIT_TO_OCTET(X) (X)
 
 #define _NANO_ERR_HW_EXCEPTION (0)      /* MPU/Bus/Usage fault */
 #define _NANO_ERR_STACK_CHK_FAIL (2)    /* Stack corruption detected */
@@ -120,11 +119,17 @@ extern void _irq_priority_set(u32_t irq, u32_t prio, u32_t flags);
 /* Spurious interrupt handler. Throws an error if called */
 extern void _irq_spurious(void *unused);
 
-FUNC_NORETURN void _SysFatalErrorHandler(unsigned int reason,
-					 const NANO_ESF *esf);
+#ifdef CONFIG_XTENSA_ASM2
+#define XTENSA_ERR_NORET /**/
+#else
+#define XTENSA_ERR_NORET FUNC_NORETURN
+#endif
 
-FUNC_NORETURN void _NanoFatalErrorHandler(unsigned int reason,
-					  const NANO_ESF *pEsf);
+XTENSA_ERR_NORET void _SysFatalErrorHandler(unsigned int reason,
+					    const NANO_ESF *esf);
+
+XTENSA_ERR_NORET void _NanoFatalErrorHandler(unsigned int reason,
+					     const NANO_ESF *pEsf);
 
 extern u32_t _timer_cycle_get_32(void);
 #define _arch_k_cycle_get_32()	_timer_cycle_get_32()
@@ -134,4 +139,4 @@ extern u32_t _timer_cycle_get_32(void);
 }
 #endif
 
-#endif /* _ARCH_IFACE_H */
+#endif /* ZEPHYR_INCLUDE_ARCH_XTENSA_ARCH_H_ */

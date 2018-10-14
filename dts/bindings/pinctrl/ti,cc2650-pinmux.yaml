@@ -12,14 +12,13 @@ properties:
       category: required
       description: compatible strings
       constraint: "ti,cc2650-pinmux"
+      generation: define
 
     reg:
       type: int
       description: mmio register space
       generation: define
       category: required
-
-cell_string: PINMUX
 
 "#cells":
   - pin

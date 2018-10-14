@@ -371,7 +371,7 @@ static int lsm9ds0_mfd_sample_fetch(struct device *dev,
 		return lsm9ds0_mfd_sample_fetch_magn(dev);
 #endif
 #if !defined(LSM9DS0_MFD_TEMP_DISABLED)
-	case SENSOR_CHAN_TEMP:
+	case SENSOR_CHAN_DIE_TEMP:
 		return lsm9ds0_mfd_sample_fetch_temp(dev);
 #endif
 	case SENSOR_CHAN_ALL:
@@ -569,7 +569,7 @@ static int lsm9ds0_mfd_channel_get(struct device *dev,
 		return lsm9ds0_mfd_get_magn(dev, chan, val);
 #endif
 #if !defined(LSM9DS0_MFD_TEMP_DISABLED)
-	case SENSOR_CHAN_TEMP:
+	case SENSOR_CHAN_DIE_TEMP:
 		val->val1 = data->sample_temp;
 		val->val2 = 0;
 		return 0;
@@ -781,8 +781,6 @@ int lsm9ds0_mfd_init(struct device *dev)
 		return -EIO;
 	}
 
-	dev->driver_api = &lsm9ds0_mfd_api_funcs;
-
 	return 0;
 }
 
@@ -793,6 +791,6 @@ static const struct lsm9ds0_mfd_config lsm9ds0_mfd_config = {
 
 static struct lsm9ds0_mfd_data lsm9ds0_mfd_data;
 
-DEVICE_INIT(lsm9ds0_mfd, CONFIG_LSM9DS0_MFD_DEV_NAME, lsm9ds0_mfd_init,
-	    &lsm9ds0_mfd_data, &lsm9ds0_mfd_config, POST_KERNEL,
-	    CONFIG_SENSOR_INIT_PRIORITY);
+DEVICE_AND_API_INIT(lsm9ds0_mfd, CONFIG_LSM9DS0_MFD_DEV_NAME, lsm9ds0_mfd_init,
+		    &lsm9ds0_mfd_data, &lsm9ds0_mfd_config, POST_KERNEL,
+		    CONFIG_SENSOR_INIT_PRIORITY, &lsm9ds0_mfd_api_funcs);

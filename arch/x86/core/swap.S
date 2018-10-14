@@ -141,10 +141,10 @@ SECTION_FUNC(TEXT, __swap)
 	movl	_kernel_offset_to_current(%edi), %edx
 	movl	%esp, _thread_offset_to_esp(%edx)
 
-#ifdef CONFIG_KERNEL_EVENT_LOGGER_CONTEXT_SWITCH
+#ifdef CONFIG_TRACING
 	/* Register the context switch */
 	push %edx
-	call	_sys_k_event_logger_context_switch
+	call	z_sys_trace_thread_switched_in
 	pop %edx
 #endif
 	movl	_kernel_offset_to_ready_q_cache(%edi), %eax
@@ -393,8 +393,7 @@ time_read_not_needed:
 #endif
 	ret
 
-#if defined(CONFIG_GDB_INFO) || defined(CONFIG_DEBUG_INFO) \
-	|| defined(CONFIG_X86_IAMCU)
+#ifdef _THREAD_WRAPPER_REQUIRED
 /**
  *
  * @brief Adjust stack/parameters before invoking thread entry function
@@ -465,8 +464,7 @@ SECTION_FUNC(TEXT, _x86_thread_entry_wrapper)
 	pop	%edx
 	pop	%ecx
 	push	$0	 /* Null return address */
-#elif defined(CONFIG_GDB_INFO) || defined(CONFIG_DEBUG_INFO)
-	movl	$0, (%esp) /* zero initialEFLAGS location */
 #endif
-	jmp	*%edi
-#endif
+	movl	$0, (%esp)
+	INDIRECT_JMP(%edi)
+#endif /* _THREAD_WRAPPER_REQUIRED */

@@ -1,5 +1,4 @@
 tests:
-  test:
-    platform_exclude: qemu_x86_nommu
+  kernel.memory_protection:
     platform_whitelist: qemu_x86
-    tags: kernel
+    tags: mmu

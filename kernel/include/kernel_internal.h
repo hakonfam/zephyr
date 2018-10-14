@@ -11,15 +11,11 @@
  * This file contains private kernel APIs that are not architecture-specific.
  */
 
-#ifndef _NANO_INTERNAL__H_
-#define _NANO_INTERNAL__H_
+#ifndef ZEPHYR_KERNEL_INCLUDE_KERNEL_INTERNAL_H_
+#define ZEPHYR_KERNEL_INCLUDE_KERNEL_INTERNAL_H_
 
 #include <kernel.h>
-
-#define K_NUM_PRIORITIES \
-	(CONFIG_NUM_COOP_PRIORITIES + CONFIG_NUM_PREEMPT_PRIORITIES + 1)
-
-#define K_NUM_PRIO_BITMAPS ((K_NUM_PRIORITIES + 31) >> 5)
+#include <stdbool.h>
 
 #ifndef _ASMLANGUAGE
 
@@ -53,32 +49,7 @@ extern void _setup_new_thread(struct k_thread *new_thread,
 			      k_thread_stack_t *stack, size_t stack_size,
 			      k_thread_entry_t entry,
 			      void *p1, void *p2, void *p3,
-			      int prio, u32_t options);
-
-/* context switching and scheduling-related routines */
-
-extern unsigned int __swap(unsigned int key);
-
-#ifdef CONFIG_TIMESLICING
-extern void _update_time_slice_before_swap(void);
-#endif
-
-#ifdef CONFIG_STACK_SENTINEL
-extern void _check_stack_sentinel(void);
-#endif
-
-static inline unsigned int _Swap(unsigned int key)
-{
-
-#ifdef CONFIG_STACK_SENTINEL
-	_check_stack_sentinel();
-#endif
-#ifdef CONFIG_TIMESLICING
-	_update_time_slice_before_swap();
-#endif
-
-	return __swap(key);
-}
+			      int prio, u32_t options, const char *name);
 
 #ifdef CONFIG_USERSPACE
 /**
@@ -187,7 +158,34 @@ void _arch_user_mode_enter(k_thread_entry_t user_entry, void *p1, void *p2,
  *            architecture specific.
  */
 extern FUNC_NORETURN void _arch_syscall_oops(void *ssf);
+
+/**
+ * @brief Safely take the length of a potentially bad string
+ *
+ * This must not fault, instead the err parameter must have -1 written to it.
+ * This function otherwise should work exactly like libc strnlen(). On success
+ * *err should be set to 0.
+ *
+ * @param s String to measure
+ * @param maxlen Max length of the string
+ * @param err Error value to write
+ * @return Length of the string, not counting NULL byte, up to maxsize
+ */
+extern size_t z_arch_user_string_nlen(const char *s, size_t maxsize, int *err);
 #endif /* CONFIG_USERSPACE */
+
+/**
+ * @brief Allocate some memory from the current thread's resource pool
+ *
+ * Threads may be assigned a resource pool, which will be used to allocate
+ * memory on behalf of certain kernel and driver APIs. Memory reserved
+ * in this way should be freed with k_free().
+ *
+ * @param size Memory allocation size
+ * @return A pointer to the allocated memory, or NULL if there is insufficient
+ * RAM in the pool or the thread has no resource pool assigned
+ */
+void *z_thread_malloc(size_t size);
 
 /* set and clear essential thread flag */
 
@@ -201,8 +199,33 @@ extern void _thread_monitor_exit(struct k_thread *thread);
 #else
 #define _thread_monitor_exit(thread) \
 	do {/* nothing */    \
-	} while (0)
+	} while (false)
 #endif /* CONFIG_THREAD_MONITOR */
+
+extern void smp_init(void);
+
+extern void smp_timer_init(void);
+
+#ifdef CONFIG_NEWLIB_LIBC
+/**
+ * @brief Fetch dimentions of newlib heap area for _sbrk()
+ *
+ * This memory region is used for heap allocations by the newlib C library.
+ * If user threads need to have access to this, the results returned can be
+ * used to program memory protection hardware appropriately.
+ *
+ * @param base Pointer to void pointer, filled in with the heap starting
+ *             address
+ * @param size Pointer to a size_y, filled in with the maximum heap size
+ */
+extern void z_newlib_get_heap_bounds(void **base, size_t *size);
+#endif
+
+extern u32_t z_early_boot_rand32_get(void);
+
+#if CONFIG_STACK_POINTER_RANDOM
+extern int z_stack_adjust_initialized;
+#endif
 
 #ifdef __cplusplus
 }
@@ -210,4 +233,4 @@ extern void _thread_monitor_exit(struct k_thread *thread);
 
 #endif /* _ASMLANGUAGE */
 
-#endif /* _NANO_INTERNAL__H_ */
+#endif /* ZEPHYR_KERNEL_INCLUDE_KERNEL_INTERNAL_H_ */

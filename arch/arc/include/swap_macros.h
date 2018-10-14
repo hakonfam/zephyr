@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef _SWAP_MACROS__H_
-#define _SWAP_MACROS__H_
+#ifndef ZEPHYR_ARCH_ARC_INCLUDE_SWAP_MACROS_H_
+#define ZEPHYR_ARCH_ARC_INCLUDE_SWAP_MACROS_H_
 
 #include <kernel_structs.h>
 #include <offsets_short.h>
@@ -41,6 +41,18 @@ extern "C" {
 	st r25, [sp, ___callee_saved_stack_t_r25_OFFSET]
 	st r26, [sp, ___callee_saved_stack_t_r26_OFFSET]
 	st fp,  [sp, ___callee_saved_stack_t_fp_OFFSET]
+
+#ifdef CONFIG_USERSPACE
+#ifdef CONFIG_ARC_HAS_SECURE
+	lr r13, [_ARC_V2_SEC_U_SP]
+	st r13, [sp, ___callee_saved_stack_t_user_sp_OFFSET]
+	lr r13, [_ARC_V2_SEC_K_SP]
+	st r13, [sp, ___callee_saved_stack_t_kernel_sp_OFFSET]
+#else
+	lr r13, [_ARC_V2_USER_SP]
+	st r13, [sp, ___callee_saved_stack_t_user_sp_OFFSET]
+#endif
+#endif
 	st r30, [sp, ___callee_saved_stack_t_r30_OFFSET]
 
 #ifdef CONFIG_FP_SHARING
@@ -93,6 +105,18 @@ extern "C" {
 	sr r13, [_ARC_V2_FPU_DPFP2H]
 #endif
 
+#endif
+
+#ifdef CONFIG_USERSPACE
+#ifdef CONFIG_ARC_HAS_SECURE
+	ld r13, [sp, ___callee_saved_stack_t_user_sp_OFFSET]
+	sr r13, [_ARC_V2_SEC_U_SP]
+	ld r13, [sp, ___callee_saved_stack_t_kernel_sp_OFFSET]
+	sr r13, [_ARC_V2_SEC_K_SP]
+#else
+	ld_s r13, [sp, ___callee_saved_stack_t_user_sp_OFFSET]
+	sr r13, [_ARC_V2_USER_SP]
+#endif
 #endif
 
 	ld_s r13, [sp, ___callee_saved_stack_t_r13_OFFSET]
@@ -218,10 +242,40 @@ extern "C" {
 
 .endm
 
+/*
+ * To use this macor, r2 should have the value of thread struct pointer to
+ * _kernel.current. r3 is a scratch reg.
+ */
+.macro _load_stack_check_regs
+#ifdef CONFIG_ARC_HAS_SECURE
+	ld r3, [r2, _thread_offset_to_k_stack_base]
+	sr r3, [_ARC_V2_S_KSTACK_BASE]
+	ld r3, [r2, _thread_offset_to_k_stack_top]
+	sr r3, [_ARC_V2_S_KSTACK_TOP]
+#ifdef CONFIG_USERSPACE
+	ld r3, [r2, _thread_offset_to_u_stack_base]
+	sr r3, [_ARC_V2_S_USTACK_BASE]
+	ld r3, [r2, _thread_offset_to_u_stack_top]
+	sr r3, [_ARC_V2_S_USTACK_TOP]
+#endif
+#else /* CONFIG_ARC_HAS_SECURE */
+	ld r3, [r2, _thread_offset_to_k_stack_base]
+	sr r3, [_ARC_V2_KSTACK_BASE]
+	ld r3, [r2, _thread_offset_to_k_stack_top]
+	sr r3, [_ARC_V2_KSTACK_TOP]
+#ifdef CONFIG_USERSPACE
+	ld r3, [r2, _thread_offset_to_u_stack_base]
+	sr r3, [_ARC_V2_USTACK_BASE]
+	ld r3, [r2, _thread_offset_to_u_stack_top]
+	sr r3, [_ARC_V2_USTACK_TOP]
+#endif
+#endif /* CONFIG_ARC_HAS_SECURE */
+.endm
+
 #endif /* _ASMLANGUAGE */
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /*  _SWAP_MACROS__H_ */
+#endif /*  ZEPHYR_ARCH_ARC_INCLUDE_SWAP_MACROS_H_ */

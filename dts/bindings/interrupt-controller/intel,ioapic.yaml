@@ -12,6 +12,7 @@ properties:
       type: string
       description: compatible strings
       constraint: "intel,ioapic"
+      generation: define
 
   reg:
       category: required
@@ -25,9 +26,8 @@ properties:
       description: number of bits of IRQ priorities
       generation: define
 
-cell_string: IRQ
-
 "#cells":
   - irq
   - sense
+  - priority
 ...

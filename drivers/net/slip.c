@@ -11,9 +11,12 @@
  * host and qemu. The host will need to run tunslip process.
  */
 
-#define SYS_LOG_DOMAIN "slip"
-#define SYS_LOG_LEVEL CONFIG_SYS_LOG_SLIP_LEVEL
-#include <logging/sys_log.h>
+#define LOG_MODULE_NAME slip
+#define LOG_LEVEL CONFIG_SLIP_LOG_LEVEL
+
+#include <logging/log.h>
+LOG_MODULE_REGISTER(LOG_MODULE_NAME);
+
 #include <stdio.h>
 
 #include <kernel.h>
@@ -22,11 +25,14 @@
 #include <errno.h>
 #include <stddef.h>
 #include <misc/util.h>
+#include <net/ethernet.h>
 #include <net/buf.h>
 #include <net/net_pkt.h>
 #include <net/net_if.h>
 #include <net/net_core.h>
+#include <net/lldp.h>
 #include <console/uart_pipe.h>
+#include <net/ethernet.h>
 
 #define SLIP_END     0300
 #define SLIP_ESC     0333
@@ -62,61 +68,34 @@ struct slip_context {
 #endif
 };
 
-#if SYS_LOG_LEVEL >= SYS_LOG_LEVEL_DEBUG
-#if defined(CONFIG_SYS_LOG_SHOW_COLOR)
-#define COLOR_OFF     "\x1B[0m"
-#define COLOR_YELLOW  "\x1B[0;33m"
+#if defined(CONFIG_NET_LLDP)
+static const struct net_lldpdu lldpdu = {
+	.chassis_id = {
+		.type_length = htons((LLDP_TLV_CHASSIS_ID << 9) |
+			NET_LLDP_CHASSIS_ID_TLV_LEN),
+		.subtype = CONFIG_NET_LLDP_CHASSIS_ID_SUBTYPE,
+		.value = NET_LLDP_CHASSIS_ID_VALUE
+	},
+	.port_id = {
+		.type_length = htons((LLDP_TLV_PORT_ID << 9) |
+			NET_LLDP_PORT_ID_TLV_LEN),
+		.subtype = CONFIG_NET_LLDP_PORT_ID_SUBTYPE,
+		.value = NET_LLDP_PORT_ID_VALUE
+	},
+	.ttl = {
+		.type_length = htons((LLDP_TLV_TTL << 9) |
+			NET_LLDP_TTL_TLV_LEN),
+		.ttl = htons(NET_LLDP_TTL)
+	},
+#if defined(CONFIG_NET_LLDP_END_LLDPDU_TLV_ENABLED)
+	.end_lldpdu_tlv = NET_LLDP_END_LLDPDU_VALUE
+#endif /* CONFIG_NET_LLDP_END_LLDPDU_TLV_ENABLED */
+};
+
+#define lldpdu_ptr (&lldpdu)
 #else
-#define COLOR_OFF     ""
-#define COLOR_YELLOW  ""
-#endif
-
-static void hexdump(const char *str, const u8_t *packet,
-		    size_t length, size_t ll_reserve)
-{
-	int n = 0;
-
-	if (!length) {
-		SYS_LOG_DBG("%s zero-length packet", str);
-		return;
-	}
-
-	while (length--) {
-		if (n % 16 == 0) {
-			printf("%s %08X ", str, n);
-		}
-
-#if defined(CONFIG_SYS_LOG_SHOW_COLOR)
-		if (n < ll_reserve) {
-			printf(COLOR_YELLOW);
-		} else {
-			printf(COLOR_OFF);
-		}
-#endif
-		printf("%02X ", *packet++);
-
-#if defined(CONFIG_SYS_LOG_SHOW_COLOR)
-		if (n < ll_reserve) {
-			printf(COLOR_OFF);
-		}
-#endif
-		n++;
-		if (n % 8 == 0) {
-			if (n % 16 == 0) {
-				printf("\n");
-			} else {
-				printf(" ");
-			}
-		}
-	}
-
-	if (n % 16) {
-		printf("\n");
-	}
-}
-#else
-#define hexdump(slip, str, packet, length, ll_reserve)
-#endif
+#define lldpdu_ptr NULL
+#endif /* CONFIG_NET_LLDP */
 
 static inline void slip_writeb(unsigned char c)
 {
@@ -175,10 +154,6 @@ static int slip_send(struct net_if *iface, struct net_pkt *pkt)
 	slip_writeb(SLIP_END);
 
 	for (frag = pkt->frags; frag; frag = frag->frags) {
-#if SYS_LOG_LEVEL >= SYS_LOG_LEVEL_DEBUG
-		int frag_count = 0;
-#endif
-
 #if defined(CONFIG_SLIP_TAP)
 		ptr = frag->data - ll_reserve;
 
@@ -208,19 +183,24 @@ static int slip_send(struct net_if *iface, struct net_pkt *pkt)
 			slip_writeb_esc(c);
 		}
 
-#if SYS_LOG_LEVEL >= SYS_LOG_LEVEL_DEBUG
-		SYS_LOG_DBG("sent data %d bytes",
-			    frag->len + net_pkt_ll_reserve(pkt));
-		if (frag->len + ll_reserve) {
-			char msg[8 + 1];
+		if (LOG_LEVEL >= LOG_LEVEL_DBG) {
+			int frag_count = 0;
 
-			snprintf(msg, sizeof(msg), "<slip %2d", frag_count++);
+			LOG_DBG("sent data %d bytes",
+				frag->len + net_pkt_ll_reserve(pkt));
 
-			hexdump(msg, net_pkt_ll(pkt),
-				frag->len + net_pkt_ll_reserve(pkt),
-				net_pkt_ll_reserve(pkt));
+			if (frag->len + net_pkt_ll_reserve(pkt)) {
+				char msg[8 + 1];
+
+				snprintf(msg, sizeof(msg), "<slip %2d",
+					 frag_count++);
+
+				LOG_HEXDUMP_DBG(net_pkt_ll(pkt),
+						frag->len +
+						net_pkt_ll_reserve(pkt),
+						msg);
+			}
 		}
-#endif
 	}
 
 	net_pkt_unref(pkt);
@@ -238,8 +218,28 @@ static struct net_pkt *slip_poll_handler(struct slip_context *slip)
 	return NULL;
 }
 
+static inline struct net_if *get_iface(struct slip_context *context,
+				       u16_t vlan_tag)
+{
+#if defined(CONFIG_NET_VLAN)
+	struct net_if *iface;
+
+	iface = net_eth_get_vlan_iface(context->iface, vlan_tag);
+	if (!iface) {
+		return context->iface;
+	}
+
+	return iface;
+#else
+	ARG_UNUSED(vlan_tag);
+
+	return context->iface;
+#endif
+}
+
 static void process_msg(struct slip_context *slip)
 {
+	u16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
 	struct net_pkt *pkt;
 
 	pkt = slip_poll_handler(slip);
@@ -247,7 +247,21 @@ static void process_msg(struct slip_context *slip)
 		return;
 	}
 
-	if (net_recv_data(slip->iface, pkt) < 0) {
+#if defined(CONFIG_NET_VLAN)
+	{
+		struct net_eth_hdr *hdr = NET_ETH_HDR(pkt);
+
+		if (ntohs(hdr->type) == NET_ETH_PTYPE_VLAN) {
+			struct net_eth_vlan_hdr *hdr_vlan =
+				(struct net_eth_vlan_hdr *)NET_ETH_HDR(pkt);
+
+			net_pkt_set_vlan_tci(pkt, ntohs(hdr_vlan->vlan.tci));
+			vlan_tag = net_pkt_vlan_tag(pkt);
+		}
+	}
+#endif
+
+	if (net_recv_data(get_iface(slip, vlan_tag), pkt) < 0) {
 		net_pkt_unref(pkt);
 	}
 
@@ -306,15 +320,14 @@ static inline int slip_input_byte(struct slip_context *slip,
 
 			slip->rx = net_pkt_get_reserve_rx(0, K_NO_WAIT);
 			if (!slip->rx) {
-				SYS_LOG_ERR("[%p] cannot allocate pkt",
-					    slip);
+				LOG_ERR("[%p] cannot allocate pkt", slip);
 				return 0;
 			}
 
 			slip->last = net_pkt_get_frag(slip->rx, K_NO_WAIT);
 			if (!slip->last) {
-				SYS_LOG_ERR("[%p] cannot allocate 1st data frag",
-					    slip);
+				LOG_ERR("[%p] cannot allocate 1st data frag",
+					slip);
 				net_pkt_unref(slip->rx);
 				slip->rx = NULL;
 				return 0;
@@ -341,8 +354,7 @@ static inline int slip_input_byte(struct slip_context *slip,
 
 		frag = net_pkt_get_reserve_rx_data(0, K_NO_WAIT);
 		if (!frag) {
-			SYS_LOG_ERR("[%p] cannot allocate next data frag",
-				    slip);
+			LOG_ERR("[%p] cannot allocate next data frag", slip);
 			net_pkt_unref(slip->rx);
 			slip->rx = NULL;
 			slip->last = NULL;
@@ -382,24 +394,29 @@ static u8_t *recv_cb(u8_t *buf, size_t *off)
 
 	for (i = 0; i < *off; i++) {
 		if (slip_input_byte(slip, buf[i])) {
-#if SYS_LOG_LEVEL >= SYS_LOG_LEVEL_DEBUG
-			struct net_buf *frag = slip->rx->frags;
-			int bytes = net_buf_frags_len(frag);
-			int count = 0;
 
-			while (bytes && frag) {
-				char msg[8 + 1];
+			if (LOG_LEVEL >= LOG_LEVEL_DBG) {
+				struct net_buf *frag = slip->rx->frags;
+				int bytes = net_buf_frags_len(frag);
+				int count = 0;
 
-				snprintf(msg, sizeof(msg), ">slip %2d", count);
+				while (bytes && frag) {
+					char msg[8 + 1];
 
-				hexdump(msg, frag->data, frag->len, 0);
+					snprintf(msg, sizeof(msg),
+						 ">slip %2d", count);
 
-				frag = frag->frags;
-				count++;
+					LOG_HEXDUMP_DBG(frag->data, frag->len,
+							msg);
+
+					frag = frag->frags;
+					count++;
+				}
+
+				LOG_DBG("[%p] received data %d bytes", slip,
+					bytes);
 			}
 
-			SYS_LOG_DBG("[%p] received data %d bytes", slip, bytes);
-#endif
 			process_msg(slip);
 			break;
 		}
@@ -410,45 +427,18 @@ static u8_t *recv_cb(u8_t *buf, size_t *off)
 	return buf;
 }
 
-static inline int _slip_mac_addr_from_str(struct slip_context *slip,
-					  const char *src)
-{
-	unsigned int len, i;
-	char *endptr;
-
-	len = strlen(src);
-	for (i = 0; i < len; i++) {
-		if (!(src[i] >= '0' && src[i] <= '9') &&
-		    !(src[i] >= 'A' && src[i] <= 'F') &&
-		    !(src[i] >= 'a' && src[i] <= 'f') &&
-		    src[i] != ':') {
-			return -EINVAL;
-		}
-	}
-
-	memset(slip->mac_addr, 0, sizeof(slip->mac_addr));
-
-	for (i = 0; i < sizeof(slip->mac_addr); i++) {
-		slip->mac_addr[i] = strtol(src, &endptr, 16);
-		src = ++endptr;
-	}
-
-	return 0;
-}
-
-
 static int slip_init(struct device *dev)
 {
 	struct slip_context *slip = dev->driver_data;
 
-	SYS_LOG_DBG("[%p] dev %p", slip, dev);
+	LOG_DBG("[%p] dev %p", slip, dev);
 
 	slip->state = STATE_OK;
 	slip->rx = NULL;
 	slip->first = false;
 
 #if defined(CONFIG_SLIP_TAP) && defined(CONFIG_NET_IPV4)
-	SYS_LOG_DBG("ARP enabled");
+	LOG_DBG("ARP enabled");
 #endif
 
 	uart_pipe_register(slip->buf, sizeof(slip->buf), recv_cb);
@@ -467,13 +457,24 @@ static inline struct net_linkaddr *slip_get_mac(struct slip_context *slip)
 static void slip_iface_init(struct net_if *iface)
 {
 	struct slip_context *slip = net_if_get_device(iface)->driver_data;
-	struct net_linkaddr *ll_addr = slip_get_mac(slip);
+	struct net_linkaddr *ll_addr;
+
+	ethernet_init(iface);
+
+	net_eth_set_lldpdu(iface, lldpdu_ptr);
+
+	if (slip->init_done) {
+		return;
+	}
+
+	ll_addr = slip_get_mac(slip);
 
 	slip->init_done = true;
 	slip->iface = iface;
 
 	if (CONFIG_SLIP_MAC_ADDR[0] != 0) {
-		if (_slip_mac_addr_from_str(slip, CONFIG_SLIP_MAC_ADDR) < 0) {
+		if (net_bytes_from_str(slip->mac_addr, sizeof(slip->mac_addr),
+				       CONFIG_SLIP_MAC_ADDR) < 0) {
 			goto use_random_mac;
 		}
 	} else {
@@ -490,23 +491,46 @@ use_random_mac:
 			     NET_LINK_ETHERNET);
 }
 
-static struct net_if_api slip_if_api = {
+static struct slip_context slip_context_data;
+
+static enum ethernet_hw_caps eth_capabilities(struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	return ETHERNET_HW_VLAN
+#if defined(CONFIG_NET_LLDP)
+		| ETHERNET_LLDP
+#endif
+		;
+}
+
+#if defined(CONFIG_SLIP_TAP) && defined(CONFIG_NET_L2_ETHERNET)
+static const struct ethernet_api slip_if_api = {
+	.iface_api.init = slip_iface_init,
+	.iface_api.send = slip_send,
+
+	.get_capabilities = eth_capabilities,
+};
+
+#define _SLIP_L2_LAYER ETHERNET_L2
+#define _SLIP_L2_CTX_TYPE NET_L2_GET_CTX_TYPE(ETHERNET_L2)
+#define _SLIP_MTU 1500
+
+ETH_NET_DEVICE_INIT(slip, CONFIG_SLIP_DRV_NAME, slip_init, &slip_context_data,
+		    NULL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &slip_if_api,
+		    _SLIP_MTU);
+#else
+
+static const struct net_if_api slip_if_api = {
 	.init = slip_iface_init,
 	.send = slip_send,
 };
 
-static struct slip_context slip_context_data;
-
-#if defined(CONFIG_SLIP_TAP) && defined(CONFIG_NET_L2_ETHERNET)
-#define _SLIP_L2_LAYER ETHERNET_L2
-#define _SLIP_L2_CTX_TYPE NET_L2_GET_CTX_TYPE(ETHERNET_L2)
-#define _SLIP_MTU 1500
-#else
 #define _SLIP_L2_LAYER DUMMY_L2
 #define _SLIP_L2_CTX_TYPE NET_L2_GET_CTX_TYPE(DUMMY_L2)
 #define _SLIP_MTU 576
-#endif
 
 NET_DEVICE_INIT(slip, CONFIG_SLIP_DRV_NAME, slip_init, &slip_context_data,
 		NULL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &slip_if_api,
 		_SLIP_L2_LAYER, _SLIP_L2_CTX_TYPE, _SLIP_MTU);
+#endif

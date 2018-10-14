@@ -9,7 +9,7 @@
 if BOARD_NUCLEO_L432KC
 
 config BOARD
-	default nucleo_l432kc
+	default "nucleo_l432kc"
 
 if UART_CONSOLE
 
@@ -24,5 +24,15 @@ config PWM_STM32_2
 	default y
 
 endif # PWM
+
+if SPI
+
+config SPI_1
+	default y
+
+config SPI_STM32_INTERRUPT
+	default y
+
+endif # SPI
 
 endif # BOARD_NUCLEO_L432KC

@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef _section_tags__h_
-#define _section_tags__h_
+#ifndef ZEPHYR_INCLUDE_LINKER_SECTION_TAGS_H_
+#define ZEPHYR_INCLUDE_LINKER_SECTION_TAGS_H_
 
 #include <toolchain.h>
 
@@ -20,8 +20,11 @@
 #if defined(CONFIG_ARM)
 #define __kinetis_flash_config_section __in_section_unique(KINETIS_FLASH_CONFIG)
 #define __ti_ccfg_section _GENERIC_SECTION(TI_CCFG)
+#define __ccm_data_section _GENERIC_SECTION(_CCM_DATA_SECTION_NAME)
+#define __ccm_bss_section _GENERIC_SECTION(_CCM_BSS_SECTION_NAME)
+#define __ccm_noinit_section _GENERIC_SECTION(_CCM_NOINIT_SECTION_NAME)
 #endif /* CONFIG_ARM */
 
 #endif /* !_ASMLANGUAGE */
 
-#endif /* _section_tags__h_ */
+#endif /* ZEPHYR_INCLUDE_LINKER_SECTION_TAGS_H_ */

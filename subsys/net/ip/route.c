@@ -9,10 +9,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#if defined(CONFIG_NET_DEBUG_ROUTE)
-#define SYS_LOG_DOMAIN "net/route"
-#define NET_LOG_ENABLED 1
-#endif
+#define LOG_MODULE_NAME net_route
+#define NET_LOG_LEVEL CONFIG_NET_ROUTE_LOG_LEVEL
 
 #include <kernel.h>
 #include <limits.h>
@@ -65,7 +63,7 @@ static inline struct net_nbr *get_nexthop_nbr(struct net_nbr *start, int idx)
 	NET_ASSERT_INFO(idx < CONFIG_NET_MAX_NEXTHOPS, "idx %d >= max %d",
 			idx, CONFIG_NET_MAX_NEXTHOPS);
 
-	return (struct net_nbr *)((void *)start +
+	return (struct net_nbr *)((u8_t *)start +
 			((sizeof(struct net_nbr) + start->size) * idx));
 }
 
@@ -146,7 +144,6 @@ struct net_nbr *net_route_get_nbr(struct net_route_entry *route)
 	return NULL;
 }
 
-#if defined(CONFIG_NET_DEBUG_ROUTE)
 void net_routes_print(void)
 {
 	int i;
@@ -158,21 +155,19 @@ void net_routes_print(void)
 			continue;
 		}
 
-		NET_DBG("[%d] %p %d addr %s/%d iface %p idx %d "
-			"ll %s",
+		NET_DBG("[%d] %p %d addr %s/%d",
 			i, nbr, nbr->ref,
-			net_sprint_ipv6_addr(&net_route_data(nbr)->addr),
-			net_route_data(nbr)->prefix_len,
+			log_strdup(net_sprint_ipv6_addr(
+					   &net_route_data(nbr)->addr)),
+			net_route_data(nbr)->prefix_len);
+		NET_DBG("    iface %p idx %d ll %s",
 			nbr->iface, nbr->idx,
 			nbr->idx == NET_NBR_LLADDR_UNKNOWN ? "?" :
-			net_sprint_ll_addr(
+			log_strdup(net_sprint_ll_addr(
 				net_nbr_get_lladdr(nbr->idx)->addr,
-				net_nbr_get_lladdr(nbr->idx)->len));
+				net_nbr_get_lladdr(nbr->idx)->len)));
 	}
 }
-#else
-#define net_routes_print(...)
-#endif /* CONFIG_NET_DEBUG_ROUTE */
 
 static inline void nbr_free(struct net_nbr *nbr)
 {
@@ -198,7 +193,7 @@ static struct net_nbr *nbr_new(struct net_if *iface,
 
 	NET_DBG("[%d] nbr %p iface %p IPv6 %s/%d",
 		nbr->idx, nbr, iface,
-		net_sprint_ipv6_addr(&net_route_data(nbr)->addr),
+		log_strdup(net_sprint_ipv6_addr(&net_route_data(nbr)->addr)),
 		prefix_len);
 
 	return nbr;
@@ -215,12 +210,13 @@ static struct net_nbr *nbr_nexthop_get(struct net_if *iface,
 	NET_ASSERT_INFO(nbr, "Next hop neighbor not found!");
 	NET_ASSERT_INFO(nbr->idx != NET_NBR_LLADDR_UNKNOWN,
 			"Nexthop %s not in neighbor cache!",
-			net_sprint_ipv6_addr(addr));
+			log_strdup(net_sprint_ipv6_addr(addr)));
 
 	net_nbr_ref(nbr);
 
 	NET_DBG("[%d] nbr %p iface %p IPv6 %s",
-		nbr->idx, nbr, iface, net_sprint_ipv6_addr(addr));
+		nbr->idx, nbr, iface,
+		log_strdup(net_sprint_ipv6_addr(addr)));
 
 	return nbr;
 }
@@ -236,22 +232,18 @@ static int nbr_nexthop_put(struct net_nbr *nbr)
 	return 0;
 }
 
-#if defined(CONFIG_NET_DEBUG_ROUTE)
+
 #define net_route_info(str, route, dst)					\
-	do {								\
-		char out[NET_IPV6_ADDR_LEN];				\
+	if (NET_LOG_LEVEL >= LOG_LEVEL_DBG) {				\
 		struct in6_addr *naddr = net_route_get_nexthop(route);	\
 									\
 		NET_ASSERT_INFO(naddr, "Unknown nexthop address");	\
 									\
-		snprintk(out, sizeof(out), "%s",			\
-			 net_sprint_ipv6_addr(dst));			\
-		NET_DBG("%s route to %s via %s (iface %p)", str, out,	\
-			net_sprint_ipv6_addr(naddr), route->iface);	\
+		NET_DBG("%s route to %s via %s (iface %p)", str,	\
+			log_strdup(net_sprint_ipv6_addr(dst)),		\
+			log_strdup(net_sprint_ipv6_addr(naddr)),	\
+			route->iface);					\
 	} while (0)
-#else
-#define net_route_info(...)
-#endif /* CONFIG_NET_DEBUG_ROUTE */
 
 /* Route was accessed, so place it in front of the routes list */
 static inline void update_route_access(struct net_route_entry *route)
@@ -307,6 +299,9 @@ struct net_route_entry *net_route_add(struct net_if *iface,
 	struct net_nbr *nbr, *nbr_nexthop, *tmp;
 	struct net_route_nexthop *nexthop_route;
 	struct net_route_entry *route;
+#if defined(CONFIG_NET_MGMT_EVENT_INFO)
+       struct net_event_ipv6_route info;
+#endif
 
 	NET_ASSERT(addr);
 	NET_ASSERT(iface);
@@ -320,7 +315,7 @@ struct net_route_entry *net_route_add(struct net_if *iface,
 	nbr_nexthop = net_ipv6_nbr_lookup(iface, nexthop);
 	if (!nbr_nexthop) {
 		NET_DBG("No such neighbor %s found",
-			net_sprint_ipv6_addr(nexthop));
+			log_strdup(net_sprint_ipv6_addr(nexthop)));
 		return NULL;
 	}
 
@@ -328,8 +323,10 @@ struct net_route_entry *net_route_add(struct net_if *iface,
 
 	NET_ASSERT(nexthop_lladdr);
 
-	NET_DBG("Nexthop %s lladdr is %s", net_sprint_ipv6_addr(nexthop),
-		net_sprint_ll_addr(nexthop_lladdr->addr, nexthop_lladdr->len));
+	NET_DBG("Nexthop %s lladdr is %s",
+		log_strdup(net_sprint_ipv6_addr(nexthop)),
+		log_strdup(net_sprint_ll_addr(nexthop_lladdr->addr,
+					      nexthop_lladdr->len)));
 
 	route = net_route_lookup(iface, addr);
 	if (route) {
@@ -343,7 +340,7 @@ struct net_route_entry *net_route_add(struct net_if *iface,
 		}
 
 		NET_DBG("Old route to %s found",
-			net_sprint_ipv6_addr(nexthop_addr));
+			log_strdup(net_sprint_ipv6_addr(nexthop_addr)));
 
 		net_route_del(route);
 	}
@@ -358,25 +355,26 @@ struct net_route_entry *net_route_add(struct net_if *iface,
 		route = CONTAINER_OF(last,
 				     struct net_route_entry,
 				     node);
-#if defined(CONFIG_NET_DEBUG_ROUTE)
-		do {
-			char out[NET_IPV6_ADDR_LEN];
+
+		if (NET_LOG_LEVEL >= LOG_LEVEL_DBG) {
 			struct in6_addr *tmp;
 			struct net_linkaddr_storage *llstorage;
 
-			snprintk(out, sizeof(out), "%s",
-				 net_sprint_ipv6_addr(&route->addr));
-
 			tmp = net_route_get_nexthop(route);
 			nbr = net_ipv6_nbr_lookup(iface, tmp);
-			llstorage = net_nbr_get_lladdr(nbr->idx);
+			if (nbr) {
+				llstorage = net_nbr_get_lladdr(nbr->idx);
 
-			NET_DBG("Removing the oldest route %s via %s [%s]",
-				out, net_sprint_ipv6_addr(tmp),
-				net_sprint_ll_addr(llstorage->addr,
-						   llstorage->len));
-		} while (0);
-#endif /* CONFIG_NET_DEBUG_ROUTE */
+				NET_DBG("Removing the oldest route %s "
+					"via %s [%s]",
+					log_strdup(net_sprint_ipv6_addr(
+							   &route->addr)),
+					log_strdup(net_sprint_ipv6_addr(tmp)),
+					log_strdup(net_sprint_ll_addr(
+							   llstorage->addr,
+							   llstorage->len)));
+			}
+		}
 
 		net_route_del(route);
 
@@ -411,7 +409,17 @@ struct net_route_entry *net_route_add(struct net_if *iface,
 
 	net_route_info("Added", route, addr);
 
+#if defined(CONFIG_NET_MGMT_EVENT_INFO)
+	net_ipaddr_copy(&info.addr, addr);
+	net_ipaddr_copy(&info.nexthop, nexthop);
+	info.prefix_len = prefix_len;
+
+	net_mgmt_event_notify_with_info(NET_EVENT_IPV6_ROUTE_ADD,
+					iface, (void *) &info,
+					sizeof(struct net_event_ipv6_route));
+#else
 	net_mgmt_event_notify(NET_EVENT_IPV6_ROUTE_ADD, iface);
+#endif
 
 	return route;
 }
@@ -420,10 +428,26 @@ int net_route_del(struct net_route_entry *route)
 {
 	struct net_nbr *nbr;
 	struct net_route_nexthop *nexthop_route;
+#if defined(CONFIG_NET_MGMT_EVENT_INFO)
+       struct net_event_ipv6_route info;
+#endif
 
 	if (!route) {
 		return -EINVAL;
 	}
+
+#if defined(CONFIG_NET_MGMT_EVENT_INFO)
+	net_ipaddr_copy(&info.addr, &route->addr);
+	info.prefix_len = route->prefix_len;
+	net_ipaddr_copy(&info.nexthop,
+			net_route_get_nexthop(route));
+
+	net_mgmt_event_notify_with_info(NET_EVENT_IPV6_ROUTE_DEL,
+					route->iface, (void *) &info,
+					sizeof(struct net_event_ipv6_route));
+#else
+	net_mgmt_event_notify(NET_EVENT_IPV6_ROUTE_DEL, route->iface);
+#endif
 
 	sys_slist_find_and_remove(&routes, &route->node);
 
@@ -433,8 +457,6 @@ int net_route_del(struct net_route_entry *route)
 	}
 
 	net_route_info("Deleted", route, &route->addr);
-
-	net_mgmt_event_notify(NET_EVENT_IPV6_ROUTE_DEL, nbr->iface);
 
 	SYS_SLIST_FOR_EACH_CONTAINER(&route->nexthop, nexthop_route, node) {
 		if (!nexthop_route->nbr) {
@@ -506,6 +528,9 @@ int net_route_del_by_nexthop_data(struct net_if *iface,
 	NET_ASSERT(nexthop);
 
 	nbr_nexthop = net_ipv6_nbr_lookup(iface, nexthop);
+	if (!nbr_nexthop) {
+		return -EINVAL;
+	}
 
 	for (i = 0; i < CONFIG_NET_MAX_ROUTES; i++) {
 		struct net_nbr *nbr = get_nbr(i);
@@ -568,12 +593,14 @@ struct in6_addr *net_route_get_nexthop(struct net_route_entry *route)
 		}
 
 		ipv6_nbr_data = net_ipv6_nbr_data(nexthop_route->nbr);
-		NET_ASSERT(ipv6_nbr_data);
+		if (ipv6_nbr_data) {
+			addr = &ipv6_nbr_data->addr;
+			NET_ASSERT(addr);
 
-		addr = &ipv6_nbr_data->addr;
-		NET_ASSERT(addr);
-
-		return addr;
+			return addr;
+		} else {
+			NET_ERR("could not get neighbor data from next hop");
+		}
 	}
 
 	return NULL;
@@ -665,7 +692,7 @@ bool net_route_mcast_del(struct net_route_entry_mcast *route)
 
 	NET_ASSERT_INFO(route->is_used,
 			"Multicast route %p to %s was already removed", route,
-			net_sprint_ipv6_addr(&route->group));
+			log_strdup(net_sprint_ipv6_addr(&route->group)));
 
 	route->is_used = false;
 
@@ -737,45 +764,58 @@ int net_route_packet(struct net_pkt *pkt, struct in6_addr *nexthop)
 	struct net_linkaddr_storage *lladdr;
 	struct net_nbr *nbr;
 
-	nbr = net_ipv6_nbr_lookup(net_pkt_iface(pkt), nexthop);
+	nbr = net_ipv6_nbr_lookup(NULL, nexthop);
 	if (!nbr) {
-		NET_DBG("Cannot find %s neighbor.",
-			net_sprint_ipv6_addr(nexthop));
+		NET_DBG("Cannot find %s neighbor",
+			log_strdup(net_sprint_ipv6_addr(nexthop)));
 		return -ENOENT;
 	}
 
 	lladdr = net_nbr_get_lladdr(nbr->idx);
 	if (!lladdr) {
 		NET_DBG("Cannot find %s neighbor link layer address.",
-			net_sprint_ipv6_addr(nexthop));
+			log_strdup(net_sprint_ipv6_addr(nexthop)));
 		return -ESRCH;
 	}
 
-	if (!net_pkt_ll_src(pkt)->addr) {
-		NET_DBG("Link layer source address not set");
-		return -EINVAL;
-	}
-
-	/* Sanitycheck: If src and dst ll addresses are going to be same,
-	 * then something went wrong in route lookup.
+#if defined(CONFIG_NET_L2_DUMMY)
+	/* No need to do this check for dummy L2 as it does not have any
+	 * link layer. This is done at runtime because we can have multiple
+	 * network technologies enabled.
 	 */
-	if (!memcmp(net_pkt_ll_src(pkt)->addr, lladdr->addr, lladdr->len)) {
-		NET_ERR("Src ll and Dst ll are same");
-		return -EINVAL;
+	if (net_if_l2(net_pkt_iface(pkt)) != &NET_L2_GET_NAME(DUMMY)) {
+#endif
+		if (!net_pkt_lladdr_src(pkt)->addr) {
+			NET_DBG("Link layer source address not set");
+			return -EINVAL;
+		}
+
+		/* Sanitycheck: If src and dst ll addresses are going to be
+		 * same, then something went wrong in route lookup.
+		 */
+		if (!memcmp(net_pkt_lladdr_src(pkt)->addr, lladdr->addr,
+			    lladdr->len)) {
+			NET_ERR("Src ll and Dst ll are same");
+			return -EINVAL;
+		}
+#if defined(CONFIG_NET_L2_DUMMY)
 	}
+#endif
 
 	net_pkt_set_forwarding(pkt, true);
 
 	/* Set the destination and source ll address in the packet.
 	 * We set the destination address to be the nexthop recipient.
 	 */
-	net_pkt_ll_src(pkt)->addr = net_pkt_ll_if(pkt)->addr;
-	net_pkt_ll_src(pkt)->type = net_pkt_ll_if(pkt)->type;
-	net_pkt_ll_src(pkt)->len = net_pkt_ll_if(pkt)->len;
+	net_pkt_lladdr_src(pkt)->addr = net_pkt_lladdr_if(pkt)->addr;
+	net_pkt_lladdr_src(pkt)->type = net_pkt_lladdr_if(pkt)->type;
+	net_pkt_lladdr_src(pkt)->len = net_pkt_lladdr_if(pkt)->len;
 
-	net_pkt_ll_dst(pkt)->addr = lladdr->addr;
-	net_pkt_ll_dst(pkt)->type = lladdr->type;
-	net_pkt_ll_dst(pkt)->len = lladdr->len;
+	net_pkt_lladdr_dst(pkt)->addr = lladdr->addr;
+	net_pkt_lladdr_dst(pkt)->type = lladdr->type;
+	net_pkt_lladdr_dst(pkt)->len = lladdr->len;
+
+	net_pkt_set_iface(pkt, nbr->iface);
 
 	return net_send_data(pkt);
 }

@@ -32,15 +32,7 @@
 
 #include <kernel_offsets.h>
 
-#ifdef CONFIG_DEBUG_INFO
-GEN_OFFSET_SYM(_kernel_arch_t, isf);
-#endif
-
-#ifdef CONFIG_GDB_INFO
-GEN_OFFSET_SYM(_thread_arch_t, esf);
-#endif
-
-#if (defined(CONFIG_FP_SHARING) || defined(CONFIG_GDB_INFO))
+#if defined(CONFIG_FP_SHARING)
 GEN_OFFSET_SYM(_thread_arch_t, excNestCount);
 #endif
 
@@ -85,10 +77,8 @@ GEN_OFFSET_SYM(NANO_ESF, eflags);
 /* tTaskStateSegment structure member offsets */
 
 
-/* size of the ISR_LIST structure. Used by linker scripts */
+/* size of the MMU_REGION structure. Used by linker scripts */
 
-GEN_ABSOLUTE_SYM(__ISR_LIST_SIZEOF, sizeof(ISR_LIST));
 GEN_ABSOLUTE_SYM(__MMU_REGION_SIZEOF, sizeof(struct mmu_region));
-
 
 GEN_ABS_SYM_END

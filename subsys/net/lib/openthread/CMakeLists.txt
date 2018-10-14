@@ -23,7 +23,7 @@ if(NOT EXTERNAL_PROJECT_PATH_OPENTHREAD)
   # TODO: Point to a Zephyr fork
   # Nov. 7
   set_ifndef(ot_GIT_REPOSITORY "https://github.com/openthread/openthread.git")
-  set_ifndef(ot_GIT_TAG a89eb887488dcbab7f5e9237e2bbcaad38140690)
+  set_ifndef(ot_GIT_TAG db4759cc41257d0572ddedbeead1e02c52033620)
   set_ifndef(ot_GIT_PROGRESS 1)
 
   list(APPEND cmd
@@ -96,11 +96,13 @@ set(commoncflags "-DOPENTHREAD_CONFIG_LOG_LEVEL=${CONFIG_OPENTHREAD_LOG_LEVEL}")
 set(commoncflags "${commoncflags} -DOPENTHREAD_PROJECT_CORE_CONFIG_FILE=\\\"openthread-core-zephyr-config.h\\\"")
 set(commoncflags "${commoncflags} -I${CMAKE_CURRENT_LIST_DIR}/platform")
 
+get_property(RULE_LAUNCH_COMPILE GLOBAL PROPERTY RULE_LAUNCH_COMPILE)
+
 set(configure_flags
   "INSTALL=${INSTALL} -p"
   "CPP=${CMAKE_C_COMPILER} -E"                 # TODO: Find CPP in toolchain-gcc.cmake and use that instead?
-  "CC=${CMAKE_C_COMPILER}"
-  "CXX=${CMAKE_CXX_COMPILER}"
+  "CC=${RULE_LAUNCH_COMPILE} ${CMAKE_C_COMPILER}"
+  "CXX=${RULE_LAUNCH_COMPILE} ${CMAKE_CXX_COMPILER}"
   OBJC=""                      # TODO: Omit this?
   "OBJCXX=${OBJCXX}"           # TODO: Omit this?
   "AR=${CMAKE_AR}"
@@ -190,15 +192,20 @@ list(APPEND cmd
 
 # TODO: Find out how to make this work.
 set(ot_include_dir ${ot_SOURCE_DIR}/include)
+# For platform.h
+set(ot_platforms_dir ${ot_SOURCE_DIR}/examples/platforms)
 
 # TODO: Is this only needed by alarm.c?
 zephyr_system_include_directories(${ot_include_dir})
+zephyr_system_include_directories(${ot_platforms_dir})
 
 # TODO: Why doesn't app get this path from the above function call?
 target_include_directories(app SYSTEM PRIVATE ${ot_include_dir})
+target_include_directories(app SYSTEM PRIVATE ${ot_platforms_dir})
 
 #set_target_properties(ot_lib PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${ot_include_dir})
 zephyr_include_directories(${ot_include_dir})
+zephyr_include_directories(${ot_platforms_dir})
 
 # Determine which libs should be linked in
 set(ot_libs
@@ -210,7 +217,7 @@ if(CONFIG_OPENTHREAD_FTD)
   set(cli_lib         openthread-cli-ftd)
 elseif(CONFIG_OPENTHREAD_MTD)
   list(APPEND ot_libs openthread-mtd)
-  set(cli_lib         openthread-cli-ftd)
+  set(cli_lib         openthread-cli-mtd)
 endif()
 
 if(CONFIG_OPENTHREAD_SHELL)

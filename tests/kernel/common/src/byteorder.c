@@ -9,7 +9,19 @@
 
 #include <misc/byteorder.h>
 
-void byteorder_test_memcpy_swap(void)
+/**
+ * @addtogroup kernel_common_tests
+ * @{
+ */
+/**
+ * @brief Test swapping for memory contents
+ *
+ * @details Verify the functionality provided by
+ * sys_memcpy_swap()
+ *
+ * @see sys_memcpy_swap()
+ */
+void test_byteorder_memcpy_swap(void)
 {
 	u8_t buf_orig[8] = { 0x00, 0x01, 0x02, 0x03,
 			     0x04, 0x05, 0x06, 0x07 };
@@ -26,7 +38,14 @@ void byteorder_test_memcpy_swap(void)
 		     "Swap memcpy failed");
 }
 
-void byteorder_test_mem_swap(void)
+/**
+ * @brief Test sys_mem_swap() functionality
+ *
+ * @details Test if sys_mem_swap() reverses the contents
+ *
+ * @see sys_mem_swap()
+ */
+void test_byteorder_mem_swap(void)
 {
 	u8_t buf_orig_1[8] = { 0x00, 0x01, 0x02, 0x03,
 			       0x04, 0x05, 0x06, 0x07 };
@@ -47,4 +66,6 @@ void byteorder_test_mem_swap(void)
 	zassert_true((memcmp(buf_orig_2, buf_chk_2, 11) == 0),
 		     "Swapping buffer failed");
 }
-
+/**
+ * @}
+ */

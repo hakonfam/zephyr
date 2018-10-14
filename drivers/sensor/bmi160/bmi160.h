@@ -5,10 +5,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef _BMI160_H_
-#define _BMI160_H_
+#ifndef ZEPHYR_DRIVERS_SENSOR_BMI160_BMI160_H_
+#define ZEPHYR_DRIVERS_SENSOR_BMI160_BMI160_H_
 
 #include <gpio.h>
+#include <spi.h>
 #include <misc/util.h>
 
 /* registers */
@@ -383,13 +384,10 @@ struct bmi160_range {
 };
 
 struct bmi160_device_config {
-	const char *spi_port;
 #if defined(CONFIG_BMI160_TRIGGER)
 	const char *gpio_port;
 	u8_t int_pin;
 #endif
-	u32_t spi_freq;
-	u8_t spi_slave;
 };
 
 union bmi160_pmu_status {
@@ -409,9 +407,7 @@ union bmi160_pmu_status {
 #	define BMI160_SAMPLE_SIZE		(3 * sizeof(u16_t))
 #endif
 
-/* total buffer contains one dummy byte, needed by SPI */
-#define BMI160_BUF_SIZE			(BMI160_SAMPLE_SIZE + 1)
-#define BMI160_DATA_OFS			1
+#define BMI160_BUF_SIZE			(BMI160_SAMPLE_SIZE)
 union bmi160_sample {
 	u8_t raw[BMI160_BUF_SIZE];
 	struct {
@@ -432,6 +428,7 @@ struct bmi160_scale {
 
 struct bmi160_device_data {
 	struct device *spi;
+	struct spi_config spi_cfg;
 #if defined(CONFIG_BMI160_TRIGGER)
 	struct device *gpio;
 	struct gpio_callback gpio_cb;
@@ -484,4 +481,4 @@ s32_t bmi160_gyr_reg_val_to_range(u8_t reg_val);
 #define SYS_LOG_DOMAIN "BMI160"
 #define SYS_LOG_LEVEL CONFIG_SYS_LOG_SENSOR_LEVEL
 #include <logging/sys_log.h>
-#endif /* _BMI160_H_ */
+#endif /* ZEPHYR_DRIVERS_SENSOR_BMI160_BMI160_H_ */

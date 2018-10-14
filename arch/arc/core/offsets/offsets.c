@@ -30,7 +30,12 @@ GEN_OFFSET_SYM(_thread_arch_t, intlock_key);
 GEN_OFFSET_SYM(_thread_arch_t, relinquish_cause);
 GEN_OFFSET_SYM(_thread_arch_t, return_value);
 #ifdef CONFIG_ARC_STACK_CHECKING
-GEN_OFFSET_SYM(_thread_arch_t, stack_base);
+GEN_OFFSET_SYM(_thread_arch_t, k_stack_base);
+GEN_OFFSET_SYM(_thread_arch_t, k_stack_top);
+#ifdef CONFIG_USERSPACE
+GEN_OFFSET_SYM(_thread_arch_t, u_stack_base);
+GEN_OFFSET_SYM(_thread_arch_t, u_stack_top);
+#endif
 #endif
 
 /* ARCv2-specific IRQ stack frame structure member offsets */
@@ -58,6 +63,9 @@ GEN_OFFSET_SYM(_isf_t, ldi_base);
 GEN_OFFSET_SYM(_isf_t, jli_base);
 #endif
 GEN_OFFSET_SYM(_isf_t, pc);
+#ifdef CONFIG_ARC_HAS_SECURE
+GEN_OFFSET_SYM(_isf_t, sec_stat);
+#endif
 GEN_OFFSET_SYM(_isf_t, status32);
 GEN_ABSOLUTE_SYM(___isf_t_SIZEOF, sizeof(_isf_t));
 
@@ -79,6 +87,14 @@ GEN_OFFSET_SYM(_callee_saved_stack_t, r24);
 GEN_OFFSET_SYM(_callee_saved_stack_t, r25);
 GEN_OFFSET_SYM(_callee_saved_stack_t, r26);
 GEN_OFFSET_SYM(_callee_saved_stack_t, fp);
+#ifdef CONFIG_USERSPACE
+#ifdef CONFIG_ARC_HAS_SECURE
+GEN_OFFSET_SYM(_callee_saved_stack_t, kernel_sp);
+GEN_OFFSET_SYM(_callee_saved_stack_t, user_sp);
+#else
+GEN_OFFSET_SYM(_callee_saved_stack_t, user_sp);
+#endif
+#endif
 GEN_OFFSET_SYM(_callee_saved_stack_t, r30);
 #ifdef CONFIG_FP_SHARING
 GEN_OFFSET_SYM(_callee_saved_stack_t, r58);

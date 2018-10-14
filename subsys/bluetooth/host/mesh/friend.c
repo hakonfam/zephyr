@@ -37,6 +37,11 @@
 #define FRIEND_ADV(buf)     CONTAINER_OF(BT_MESH_ADV(buf), \
 					 struct friend_adv, adv)
 
+/* PDUs from Friend to the LPN should only be transmitted once with the
+ * smallest possible interval (20ms).
+ */
+#define FRIEND_XMIT         BT_MESH_TRANSMIT(0, 20)
+
 struct friend_pdu_info {
 	u16_t  src;
 	u16_t  dst;
@@ -49,8 +54,8 @@ struct friend_pdu_info {
 	u32_t  iv_index;
 };
 
-NET_BUF_POOL_DEFINE(friend_buf_pool, FRIEND_BUF_COUNT,
-		    BT_MESH_ADV_DATA_SIZE, BT_MESH_ADV_USER_DATA_SIZE, NULL);
+NET_BUF_POOL_FIXED_DEFINE(friend_buf_pool, FRIEND_BUF_COUNT,
+			  BT_MESH_ADV_DATA_SIZE, NULL);
 
 static struct friend_adv {
 	struct bt_mesh_adv adv;
@@ -83,7 +88,6 @@ static void discard_buffer(void)
 
 static struct net_buf *friend_buf_alloc(u16_t src)
 {
-	u8_t xmit = bt_mesh_net_transmit_get();
 	struct net_buf *buf;
 
 	BT_DBG("src 0x%04x", src);
@@ -91,9 +95,7 @@ static struct net_buf *friend_buf_alloc(u16_t src)
 	do {
 		buf = bt_mesh_adv_create_from_pool(&friend_buf_pool, adv_alloc,
 						   BT_MESH_ADV_DATA,
-						   BT_MESH_TRANSMIT_COUNT(xmit),
-						   BT_MESH_TRANSMIT_INT(xmit),
-						   K_NO_WAIT);
+						   FRIEND_XMIT, K_NO_WAIT);
 		if (!buf) {
 			discard_buffer();
 		}
@@ -189,7 +191,7 @@ static void friend_clear(struct bt_mesh_friend *frnd)
 	frnd->fsn = 0;
 	frnd->queue_size = 0;
 	frnd->pending_req = 0;
-	memset(frnd->sub_list, 0, sizeof(frnd->sub_list));
+	(void)memset(frnd->sub_list, 0, sizeof(frnd->sub_list));
 }
 
 void bt_mesh_friend_clear_net_idx(u16_t net_idx)
@@ -377,6 +379,7 @@ static struct net_buf *encode_friend_ctl(struct bt_mesh_friend *frnd,
 					 struct net_buf_simple *sdu)
 {
 	struct friend_pdu_info info;
+	u32_t seq;
 
 	BT_DBG("LPN 0x%04x", frnd->lpn);
 
@@ -388,9 +391,10 @@ static struct net_buf *encode_friend_ctl(struct bt_mesh_friend *frnd,
 	info.ctl = 1;
 	info.ttl = 0;
 
-	info.seq[0] = (bt_mesh.seq >> 16);
-	info.seq[1] = (bt_mesh.seq >> 8);
-	info.seq[2] = bt_mesh.seq++;
+	seq = bt_mesh_next_seq();
+	info.seq[0] = seq >> 16;
+	info.seq[1] = seq >> 8;
+	info.seq[2] = seq;
 
 	info.iv_index = BT_MESH_NET_IVI_TX;
 
@@ -400,37 +404,37 @@ static struct net_buf *encode_friend_ctl(struct bt_mesh_friend *frnd,
 static struct net_buf *encode_update(struct bt_mesh_friend *frnd, u8_t md)
 {
 	struct bt_mesh_ctl_friend_update *upd;
-	struct net_buf_simple *sdu = NET_BUF_SIMPLE(1 + sizeof(*upd));
+	NET_BUF_SIMPLE_DEFINE(sdu, 1 + sizeof(*upd));
 	struct bt_mesh_subnet *sub = bt_mesh_subnet_get(frnd->net_idx);
 
 	__ASSERT_NO_MSG(sub != NULL);
 
 	BT_DBG("lpn 0x%04x md 0x%02x", frnd->lpn, md);
 
-	net_buf_simple_init(sdu, 1);
+	net_buf_simple_reserve(&sdu, 1);
 
-	upd = net_buf_simple_add(sdu, sizeof(*upd));
+	upd = net_buf_simple_add(&sdu, sizeof(*upd));
 	upd->flags = bt_mesh_net_flags(sub);
 	upd->iv_index = sys_cpu_to_be32(bt_mesh.iv_index);
 	upd->md = md;
 
-	return encode_friend_ctl(frnd, TRANS_CTL_OP_FRIEND_UPDATE, sdu);
+	return encode_friend_ctl(frnd, TRANS_CTL_OP_FRIEND_UPDATE, &sdu);
 }
 
 static void enqueue_sub_cfm(struct bt_mesh_friend *frnd, u8_t xact)
 {
 	struct bt_mesh_ctl_friend_sub_confirm *cfm;
-	struct net_buf_simple *sdu = NET_BUF_SIMPLE(1 + sizeof(*cfm));
+	NET_BUF_SIMPLE_DEFINE(sdu, 1 + sizeof(*cfm));
 	struct net_buf *buf;
 
 	BT_DBG("lpn 0x%04x xact 0x%02x", frnd->lpn, xact);
 
-	net_buf_simple_init(sdu, 1);
+	net_buf_simple_reserve(&sdu, 1);
 
-	cfm = net_buf_simple_add(sdu, sizeof(*cfm));
+	cfm = net_buf_simple_add(&sdu, sizeof(*cfm));
 	cfm->xact = xact;
 
-	buf = encode_friend_ctl(frnd, TRANS_CTL_OP_FRIEND_SUB_CFM, sdu);
+	buf = encode_friend_ctl(frnd, TRANS_CTL_OP_FRIEND_SUB_CFM, &sdu);
 	if (!buf) {
 		BT_ERR("Unable to encode Subscription List Confirmation");
 		return;
@@ -721,14 +725,14 @@ int bt_mesh_friend_clear_cfm(struct bt_mesh_net_rx *rx,
 static void enqueue_offer(struct bt_mesh_friend *frnd, s8_t rssi)
 {
 	struct bt_mesh_ctl_friend_offer *off;
-	struct net_buf_simple *sdu = NET_BUF_SIMPLE(1 + sizeof(*off));
+	NET_BUF_SIMPLE_DEFINE(sdu, 1 + sizeof(*off));
 	struct net_buf *buf;
 
 	BT_DBG("");
 
-	net_buf_simple_init(sdu, 1);
+	net_buf_simple_reserve(&sdu, 1);
 
-	off = net_buf_simple_add(sdu, sizeof(*off));
+	off = net_buf_simple_add(&sdu, sizeof(*off));
 
 	off->recv_win = CONFIG_BT_MESH_FRIEND_RECV_WIN,
 	off->queue_size = CONFIG_BT_MESH_FRIEND_QUEUE_SIZE,
@@ -736,7 +740,7 @@ static void enqueue_offer(struct bt_mesh_friend *frnd, s8_t rssi)
 	off->rssi = rssi,
 	off->frnd_counter = sys_cpu_to_be16(frnd->counter);
 
-	buf = encode_friend_ctl(frnd, TRANS_CTL_OP_FRIEND_OFFER, sdu);
+	buf = encode_friend_ctl(frnd, TRANS_CTL_OP_FRIEND_OFFER, &sdu);
 	if (!buf) {
 		BT_ERR("Unable to encode Friend Offer");
 		return;
@@ -1096,7 +1100,7 @@ static void friend_lpn_enqueue_rx(struct bt_mesh_friend *frnd,
 	}
 
 	info.src = rx->ctx.addr;
-	info.dst = rx->dst;
+	info.dst = rx->ctx.recv_dst;
 
 	if (rx->net_if == BT_MESH_NET_IF_LOCAL) {
 		info.ttl = rx->ctx.recv_ttl;
@@ -1135,6 +1139,7 @@ static void friend_lpn_enqueue_tx(struct bt_mesh_friend *frnd,
 {
 	struct friend_pdu_info info;
 	struct net_buf *buf;
+	u32_t seq;
 
 	BT_DBG("LPN 0x%04x", frnd->lpn);
 
@@ -1148,9 +1153,10 @@ static void friend_lpn_enqueue_tx(struct bt_mesh_friend *frnd,
 	info.ttl = tx->ctx->send_ttl;
 	info.ctl = (tx->ctx->app_idx == BT_MESH_KEY_UNUSED);
 
-	info.seq[0] = (bt_mesh.seq >> 16);
-	info.seq[1] = (bt_mesh.seq >> 8);
-	info.seq[2] = bt_mesh.seq++;
+	seq = bt_mesh_next_seq();
+	info.seq[0] = seq >> 16;
+	info.seq[1] = seq >> 8;
+	info.seq[2] = seq;
 
 	info.iv_index = BT_MESH_NET_IVI_TX;
 
@@ -1231,12 +1237,14 @@ void bt_mesh_friend_enqueue_rx(struct bt_mesh_net_rx *rx,
 	}
 
 	BT_DBG("recv_ttl %u net_idx 0x%04x src 0x%04x dst 0x%04x",
-	       rx->ctx.recv_ttl, rx->sub->net_idx, rx->ctx.addr, rx->dst);
+	       rx->ctx.recv_ttl, rx->sub->net_idx, rx->ctx.addr,
+	       rx->ctx.recv_dst);
 
 	for (i = 0; i < ARRAY_SIZE(bt_mesh.frnd); i++) {
 		struct bt_mesh_friend *frnd = &bt_mesh.frnd[i];
 
-		if (friend_lpn_matches(frnd, rx->sub->net_idx, rx->dst)) {
+		if (friend_lpn_matches(frnd, rx->sub->net_idx,
+				       rx->ctx.recv_dst)) {
 			friend_lpn_enqueue_rx(frnd, rx, type, seq_auth, sbuf);
 		}
 	}

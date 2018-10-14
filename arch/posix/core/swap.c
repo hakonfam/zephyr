@@ -17,6 +17,7 @@
 #include <kernel_structs.h>
 #include "posix_core.h"
 #include "irq.h"
+#include "kswap.h"
 
 /**
  *
@@ -33,7 +34,7 @@
  *
  */
 
-unsigned int __swap(unsigned int key)
+int __swap(unsigned int key)
 {
 /*
  * struct k_thread * _kernel.current is the currently runnig thread
@@ -49,9 +50,7 @@ unsigned int __swap(unsigned int key)
 	_kernel.current->callee_saved.retval = -EAGAIN;
 	/* retval may be modified with a call to _set_thread_return_value() */
 
-#if CONFIG_KERNEL_EVENT_LOGGER_CONTEXT_SWITCH
-	_sys_k_event_logger_context_switch();
-#endif
+	z_sys_trace_thread_switched_in();
 
 	posix_thread_status_t *ready_thread_ptr =
 		(posix_thread_status_t *)
@@ -99,6 +98,20 @@ void _arch_switch_to_main_thread(struct k_thread *main_thread,
 	_kernel.current = _kernel.ready_q.cache;
 
 	posix_main_thread_start(ready_thread_ptr->thread_idx);
-}
+} /* LCOV_EXCL_LINE */
 #endif
 
+#ifdef CONFIG_SYS_POWER_MANAGEMENT
+/**
+ * If the kernel is in idle mode, take it out
+ */
+void posix_irq_check_idle_exit(void)
+{
+	if (_kernel.idle) {
+		s32_t idle_val = _kernel.idle;
+
+		_kernel.idle = 0;
+		_sys_power_save_idle_exit(idle_val);
+	}
+}
+#endif

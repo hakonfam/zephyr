@@ -1,6 +1,7 @@
 /*  Bluetooth Mesh */
 
 /*
+ * Copyright (c) 2018 Nordic Semiconductor ASA
  * Copyright (c) 2017 Intel Corporation
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -22,24 +23,26 @@
 #include "../hci_core.h"
 
 #include "adv.h"
-#include "foundation.h"
 #include "net.h"
+#include "foundation.h"
 #include "beacon.h"
 #include "prov.h"
 #include "proxy.h"
 
-/* Window and Interval are equal for continuous scanning */
-#define MESH_SCAN_INTERVAL 0x10
-#define MESH_SCAN_WINDOW   0x10
-
 /* Convert from ms to 0.625ms units */
-#define ADV_INT(_ms) ((_ms) * 8 / 5)
+#define ADV_SCAN_UNIT(_ms) ((_ms) * 8 / 5)
+
+/* Window and Interval are equal for continuous scanning */
+#define MESH_SCAN_INTERVAL_MS 10
+#define MESH_SCAN_WINDOW_MS   10
+#define MESH_SCAN_INTERVAL    ADV_SCAN_UNIT(MESH_SCAN_INTERVAL_MS)
+#define MESH_SCAN_WINDOW      ADV_SCAN_UNIT(MESH_SCAN_WINDOW_MS)
 
 /* Pre-5.0 controllers enforce a minimum interval of 100ms
  * whereas 5.0+ controllers can go down to 20ms.
  */
-#define ADV_INT_DEFAULT  K_MSEC(100)
-#define ADV_INT_FAST     K_MSEC(20)
+#define ADV_INT_DEFAULT_MS 100
+#define ADV_INT_FAST_MS    20
 
 /* TinyCrypt PRNG consumes a lot of stack space, so we need to have
  * an increased call stack whenever it's used.
@@ -58,6 +61,7 @@ static const u8_t adv_type[] = {
 	[BT_MESH_ADV_PROV]   = BT_DATA_MESH_PROV,
 	[BT_MESH_ADV_DATA]   = BT_DATA_MESH_MESSAGE,
 	[BT_MESH_ADV_BEACON] = BT_DATA_MESH_BEACON,
+	[BT_MESH_ADV_URI]    = BT_DATA_URI,
 };
 
 NET_BUF_POOL_DEFINE(adv_buf_pool, CONFIG_BT_MESH_ADV_BUF_COUNT,
@@ -90,7 +94,7 @@ static inline void adv_send_end(int err, const struct bt_mesh_send_cb *cb,
 static inline void adv_send(struct net_buf *buf)
 {
 	const s32_t adv_int_min = ((bt_dev.hci_version >= BT_HCI_VERSION_5_0) ?
-				   ADV_INT_FAST : ADV_INT_DEFAULT);
+				   ADV_INT_FAST_MS : ADV_INT_DEFAULT_MS);
 	const struct bt_mesh_send_cb *cb = BT_MESH_ADV(buf)->cb;
 	void *cb_data = BT_MESH_ADV(buf)->cb_data;
 	struct bt_le_adv_param param;
@@ -98,22 +102,31 @@ static inline void adv_send(struct net_buf *buf)
 	struct bt_data ad;
 	int err;
 
-	adv_int = max(adv_int_min, BT_MESH_ADV(buf)->adv_int);
-	duration = (BT_MESH_ADV(buf)->count + 1) * (adv_int + 10);
+	adv_int = max(adv_int_min,
+		      BT_MESH_TRANSMIT_INT(BT_MESH_ADV(buf)->xmit));
+	duration = (MESH_SCAN_WINDOW_MS +
+		    ((BT_MESH_TRANSMIT_COUNT(BT_MESH_ADV(buf)->xmit) + 1) *
+		     (adv_int + 10)));
 
 	BT_DBG("type %u len %u: %s", BT_MESH_ADV(buf)->type,
 	       buf->len, bt_hex(buf->data, buf->len));
 	BT_DBG("count %u interval %ums duration %ums",
-	       BT_MESH_ADV(buf)->count + 1, adv_int, duration);
+	       BT_MESH_TRANSMIT_COUNT(BT_MESH_ADV(buf)->xmit) + 1, adv_int,
+	       duration);
 
 	ad.type = adv_type[BT_MESH_ADV(buf)->type];
 	ad.data_len = buf->len;
 	ad.data = buf->data;
 
-	param.options = 0;
-	param.interval_min = ADV_INT(adv_int);
+	if (IS_ENABLED(CONFIG_BT_MESH_DEBUG_USE_ID_ADDR)) {
+		param.options = BT_LE_ADV_OPT_USE_IDENTITY;
+	} else {
+		param.options = 0;
+	}
+
+	param.id = BT_ID_DEFAULT;
+	param.interval_min = ADV_SCAN_UNIT(adv_int);
 	param.interval_max = param.interval_min;
-	param.own_addr = NULL;
 
 	err = bt_le_adv_start(&param, &ad, 1, NULL, 0);
 	net_buf_unref(buf);
@@ -125,7 +138,7 @@ static inline void adv_send(struct net_buf *buf)
 
 	BT_DBG("Advertising started. Sleeping %u ms", duration);
 
-	k_sleep(duration);
+	k_sleep(K_MSEC(duration));
 
 	err = bt_le_adv_stop();
 	adv_send_end(err, cb, cb_data);
@@ -135,6 +148,14 @@ static inline void adv_send(struct net_buf *buf)
 	}
 
 	BT_DBG("Advertising stopped");
+}
+
+static void adv_stack_dump(const struct k_thread *thread, void *user_data)
+{
+#if defined(CONFIG_THREAD_STACK_INFO)
+	stack_analyze((char *)user_data, (char *)thread->stack_info.start,
+						thread->stack_info.size);
+#endif
 }
 
 static void adv_thread(void *p1, void *p2, void *p3)
@@ -170,7 +191,7 @@ static void adv_thread(void *p1, void *p2, void *p3)
 		}
 
 		STACK_ANALYZE("adv stack", adv_thread_stack);
-		k_call_stacks_analyze();
+		k_thread_foreach(adv_stack_dump, "BT_MESH");
 
 		/* Give other threads a chance to run */
 		k_yield();
@@ -187,8 +208,7 @@ void bt_mesh_adv_update(void)
 struct net_buf *bt_mesh_adv_create_from_pool(struct net_buf_pool *pool,
 					     bt_mesh_adv_alloc_t get_id,
 					     enum bt_mesh_adv_type type,
-					     u8_t xmit_count, u8_t xmit_int,
-					     s32_t timeout)
+					     u8_t xmit, s32_t timeout)
 {
 	struct bt_mesh_adv *adv;
 	struct net_buf *buf;
@@ -201,20 +221,19 @@ struct net_buf *bt_mesh_adv_create_from_pool(struct net_buf_pool *pool,
 	adv = get_id(net_buf_id(buf));
 	BT_MESH_ADV(buf) = adv;
 
-	memset(adv, 0, sizeof(*adv));
+	(void)memset(adv, 0, sizeof(*adv));
 
 	adv->type         = type;
-	adv->count        = xmit_count;
-	adv->adv_int      = xmit_int;
+	adv->xmit         = xmit;
 
 	return buf;
 }
 
-struct net_buf *bt_mesh_adv_create(enum bt_mesh_adv_type type, u8_t xmit_count,
-				   u8_t xmit_int, s32_t timeout)
+struct net_buf *bt_mesh_adv_create(enum bt_mesh_adv_type type, u8_t xmit,
+				   s32_t timeout)
 {
 	return bt_mesh_adv_create_from_pool(&adv_buf_pool, adv_alloc, type,
-					    xmit_count, xmit_int, timeout);
+					    xmit, timeout);
 }
 
 void bt_mesh_adv_send(struct net_buf *buf, const struct bt_mesh_send_cb *cb,

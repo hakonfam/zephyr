@@ -27,7 +27,7 @@ struct channel_info {
 
 /* change device names if you want to use different sensors */
 static struct channel_info info[] = {
-	{SENSOR_CHAN_TEMP, "HDC1008"},
+	{SENSOR_CHAN_AMBIENT_TEMP, "HDC1008"},
 	{SENSOR_CHAN_HUMIDITY, "HDC1008"},
 	{SENSOR_CHAN_PRESS, "BMP280"},
 };
@@ -99,7 +99,7 @@ void main(void)
 		char row[16];
 
 		/* clear LCD */
-		memset(row, ' ', sizeof(row));
+		(void)memset(row, ' ', sizeof(row));
 		glcd_cursor_pos_set(glcd, 0, 0);
 		glcd_print(glcd, row, sizeof(row));
 		glcd_cursor_pos_set(glcd, 0, 1);
@@ -113,8 +113,7 @@ void main(void)
 
 		/* display himidity on LCD */
 		glcd_cursor_pos_set(glcd, 17 - strlen(row), 0);
-		sprintf(row, "RH:%d%c", val[1].val1/1000,
-			37 /* percent symbol */);
+		sprintf(row, "RH:%d%%", val[1].val1);
 		glcd_print(glcd, row, strlen(row));
 
 		/* display pressure on LCD */

@@ -5,7 +5,6 @@
 #
 ---
 title: STMicroelectronics SPBTLE-RF bluetooth module
-id: st,spbtle-rf
 version: 0.1
 
 description: >
@@ -18,4 +17,13 @@ properties:
     compatible:
       constraint: "st,spbtle-rf"
 
+    irq-gpios:
+      type: compound
+      category: required
+      generation: define, use-prop-name
+
+    reset-gpios:
+      type: compound
+      category: required
+      generation: define, use-prop-name
 ...

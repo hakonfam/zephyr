@@ -4,15 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#if defined(CONFIG_NET_DEBUG_HTTP)
 #if defined(CONFIG_HTTPS)
-#define SYS_LOG_DOMAIN "https/client"
+#define LOG_MODULE_NAME net_https_client
 #else
-#define SYS_LOG_DOMAIN "http/client"
+#define LOG_MODULE_NAME net_http_client
 #endif
-#define NET_SYS_LOG_LEVEL SYS_LOG_LEVEL_DEBUG
-#define NET_LOG_ENABLED 1
-#endif
+#define NET_LOG_LEVEL CONFIG_HTTP_LOG_LEVEL
 
 #include <zephyr.h>
 #include <string.h>
@@ -38,12 +35,15 @@
 #define HTTP_CONTENT_LEN   "Content-Length"
 #define HTTP_CONT_LEN_SIZE 6
 
+/* Default network activity timeout in seconds */
+#define HTTP_NETWORK_TIMEOUT	K_SECONDS(CONFIG_HTTP_CLIENT_NETWORK_TIMEOUT)
+
 int client_reset(struct http_ctx *ctx)
 {
 	http_parser_init(&ctx->http.parser, HTTP_RESPONSE);
 
-	memset(ctx->http.rsp.http_status, 0,
-	       sizeof(ctx->http.rsp.http_status));
+	(void)memset(ctx->http.rsp.http_status, 0,
+		     sizeof(ctx->http.rsp.http_status));
 
 	ctx->http.rsp.cl_present = 0;
 	ctx->http.rsp.content_length = 0;
@@ -52,7 +52,8 @@ int client_reset(struct http_ctx *ctx)
 	ctx->http.rsp.message_complete = 0;
 	ctx->http.rsp.body_start = NULL;
 
-	memset(ctx->http.rsp.response_buf, 0, ctx->http.rsp.response_buf_len);
+	(void)memset(ctx->http.rsp.response_buf, 0,
+		     ctx->http.rsp.response_buf_len);
 	ctx->http.rsp.data_len = 0;
 
 	return 0;
@@ -69,41 +70,41 @@ int http_request(struct http_ctx *ctx, struct http_request *req, s32_t timeout,
 		ctx->pending = NULL;
 	}
 
-	ret = http_add_header(ctx, method, user_data);
+	ret = http_add_header(ctx, method, NULL, user_data);
 	if (ret < 0) {
 		goto out;
 	}
 
-	ret = http_add_header(ctx, " ", user_data);
+	ret = http_add_header(ctx, " ", NULL, user_data);
 	if (ret < 0) {
 		goto out;
 	}
 
-	ret = http_add_header(ctx, req->url, user_data);
+	ret = http_add_header(ctx, req->url, NULL, user_data);
 	if (ret < 0) {
 		goto out;
 	}
 
-	ret = http_add_header(ctx, req->protocol, user_data);
+	ret = http_add_header(ctx, req->protocol, NULL, user_data);
 	if (ret < 0) {
 		goto out;
 	}
 
-	ret = http_add_header(ctx, HTTP_CRLF, user_data);
+	ret = http_add_header(ctx, HTTP_CRLF, NULL, user_data);
 	if (ret < 0) {
 		goto out;
 	}
 
 	if (req->host) {
 		ret = http_add_header_field(ctx, HTTP_HOST, req->host,
-					    user_data);
+					    NULL, user_data);
 		if (ret < 0) {
 			goto out;
 		}
 	}
 
 	if (req->header_fields) {
-		ret = http_add_header(ctx, req->header_fields, user_data);
+		ret = http_add_header(ctx, req->header_fields, NULL, user_data);
 		if (ret < 0) {
 			goto out;
 		}
@@ -112,7 +113,7 @@ int http_request(struct http_ctx *ctx, struct http_request *req, s32_t timeout,
 	if (req->content_type_value) {
 		ret = http_add_header_field(ctx, HTTP_CONTENT_TYPE,
 					    req->content_type_value,
-					    user_data);
+					    NULL, user_data);
 		if (ret < 0) {
 			goto out;
 		}
@@ -120,7 +121,6 @@ int http_request(struct http_ctx *ctx, struct http_request *req, s32_t timeout,
 
 	if (req->payload && req->payload_size) {
 		char content_len_str[HTTP_CONT_LEN_SIZE];
-		int i;
 
 		ret = snprintk(content_len_str, HTTP_CONT_LEN_SIZE,
 			       "%u", req->payload_size);
@@ -130,30 +130,25 @@ int http_request(struct http_ctx *ctx, struct http_request *req, s32_t timeout,
 		}
 
 		ret = http_add_header_field(ctx, HTTP_CONTENT_LEN,
-					    content_len_str, user_data);
+					    content_len_str,
+					    NULL, user_data);
 		if (ret < 0) {
 			goto out;
 		}
 
-		ret = http_add_header(ctx, HTTP_CRLF, user_data);
+		ret = http_add_header(ctx, HTTP_CRLF, NULL, user_data);
 		if (ret < 0) {
 			goto out;
 		}
 
-		for (i = 0; i < req->payload_size;) {
-			ret = http_send_chunk(ctx,
-					      req->payload + i,
-					      req->payload_size - i,
-					      user_data);
-			if (ret < 0) {
-				NET_ERR("Cannot send data to peer (%d)", ret);
-				return ret;
-			}
-
-			i += ret;
+		ret = http_prepare_and_send(ctx, req->payload,
+					    req->payload_size,
+					    NULL, user_data);
+		if (ret < 0) {
+			goto out;
 		}
 	} else {
-		ret = http_add_header(ctx, HTTP_EOF, user_data);
+		ret = http_add_header(ctx, HTTP_EOF, NULL, user_data);
 		if (ret < 0) {
 			goto out;
 		}
@@ -170,7 +165,6 @@ out:
 	return ret;
 }
 
-#if defined(CONFIG_NET_DEBUG_HTTP)
 static void sprint_addr(char *buf, int len,
 			sa_family_t family,
 			struct sockaddr *addr)
@@ -183,27 +177,29 @@ static void sprint_addr(char *buf, int len,
 		NET_DBG("Invalid protocol family");
 	}
 }
-#endif
 
 static inline void print_info(struct http_ctx *ctx,
 			      enum http_method method)
 {
-#if defined(CONFIG_NET_DEBUG_HTTP)
-	char local[NET_IPV6_ADDR_LEN];
-	char remote[NET_IPV6_ADDR_LEN];
+	if (NET_LOG_LEVEL >= LOG_LEVEL_INF) {
+		char local[NET_IPV6_ADDR_LEN];
+		char remote[NET_IPV6_ADDR_LEN];
 
-	sprint_addr(local, NET_IPV6_ADDR_LEN,
-		    ctx->app_ctx.default_ctx->local.sa_family,
-		    &ctx->app_ctx.default_ctx->local);
+		sprint_addr(local, NET_IPV6_ADDR_LEN,
+			    ctx->app_ctx.default_ctx->local.sa_family,
+			    &ctx->app_ctx.default_ctx->local);
 
-	sprint_addr(remote, NET_IPV6_ADDR_LEN,
-		    ctx->app_ctx.default_ctx->remote.sa_family,
-		    &ctx->app_ctx.default_ctx->remote);
+		sprint_addr(remote, NET_IPV6_ADDR_LEN,
+			    ctx->app_ctx.default_ctx->remote.sa_family,
+			    &ctx->app_ctx.default_ctx->remote);
 
-	NET_DBG("HTTP %s (%s) %s -> %s port %d",
-		http_method_str(method), ctx->http.req.host, local, remote,
-		ntohs(net_sin(&ctx->app_ctx.default_ctx->remote)->sin_port));
-#endif
+		NET_DBG("HTTP %s (%s) %s -> %s port %d",
+			http_method_str(method),
+			log_strdup(ctx->http.req.host), log_strdup(local),
+			log_strdup(remote),
+			ntohs(net_sin(&ctx->app_ctx.default_ctx->remote)->
+			      sin_port));
+	}
 }
 
 int http_client_send_req(struct http_ctx *ctx,
@@ -235,7 +231,7 @@ int http_client_send_req(struct http_ctx *ctx,
 
 	ctx->http.rsp.cb = cb;
 
-	ret = net_app_connect(&ctx->app_ctx, timeout);
+	ret = net_app_connect(&ctx->app_ctx, HTTP_NETWORK_TIMEOUT);
 	if (ret < 0) {
 		NET_DBG("Cannot connect to server (%d)", ret);
 		return ret;
@@ -244,7 +240,7 @@ int http_client_send_req(struct http_ctx *ctx,
 	/* We might wait longer than timeout if the first connection
 	 * establishment takes long time (like with HTTPS)
 	 */
-	if (k_sem_take(&ctx->http.connect_wait, timeout)) {
+	if (k_sem_take(&ctx->http.connect_wait, HTTP_NETWORK_TIMEOUT)) {
 		NET_DBG("Connection timed out");
 		ret = -ETIMEDOUT;
 		goto out;
@@ -275,21 +271,21 @@ out:
 
 static void print_header_field(size_t len, const char *str)
 {
-#if defined(CONFIG_NET_DEBUG_HTTP)
+	if (NET_LOG_LEVEL >= LOG_LEVEL_INF) {
 #define MAX_OUTPUT_LEN 128
-	char output[MAX_OUTPUT_LEN];
+		char output[MAX_OUTPUT_LEN];
 
-	/* The value of len does not count \0 so we need to increase it
-	 * by one.
-	 */
-	if ((len + 1) > sizeof(output)) {
-		len = sizeof(output) - 1;
+		/* The value of len does not count \0 so we need to increase it
+		 * by one.
+		 */
+		if ((len + 1) > sizeof(output)) {
+			len = sizeof(output) - 1;
+		}
+
+		snprintk(output, len + 1, "%s", str);
+
+		NET_DBG("[%zd] %s", len, log_strdup(output));
 	}
-
-	snprintk(output, len + 1, "%s", str);
-
-	NET_DBG("[%zd] %s", len, output);
-#endif
 }
 
 static int on_url(struct http_parser *parser, const char *at, size_t length)
@@ -312,7 +308,8 @@ static int on_status(struct http_parser *parser, const char *at, size_t length)
 	memcpy(ctx->http.rsp.http_status, at, len);
 	ctx->http.rsp.http_status[len] = 0;
 
-	NET_DBG("HTTP response status %s", ctx->http.rsp.http_status);
+	NET_DBG("HTTP response status %s",
+		log_strdup(ctx->http.rsp.http_status));
 
 	return 0;
 }
@@ -423,6 +420,13 @@ static int on_headers_complete(struct http_parser *parser)
 		return 1;
 	}
 
+	if ((ctx->http.req.method == HTTP_PUT ||
+	     ctx->http.req.method == HTTP_POST)
+	    && ctx->http.rsp.content_length == 0) {
+		NET_DBG("No body expected");
+		return 1;
+	}
+
 	NET_DBG("Headers complete");
 
 	return 0;
@@ -430,16 +434,15 @@ static int on_headers_complete(struct http_parser *parser)
 
 static int on_message_begin(struct http_parser *parser)
 {
-#if defined(CONFIG_NET_DEBUG_HTTP) && (CONFIG_SYS_LOG_NET_LEVEL > 2)
-	struct http_ctx *ctx = CONTAINER_OF(parser,
-					    struct http_ctx,
-					    http.parser);
+	if (NET_LOG_LEVEL >= LOG_LEVEL_INF) {
+		struct http_ctx *ctx = CONTAINER_OF(parser,
+						    struct http_ctx,
+						    http.parser);
 
-	NET_DBG("-- HTTP %s response (headers) --",
-		http_method_str(ctx->http.req.method));
-#else
-	ARG_UNUSED(parser);
-#endif
+		NET_DBG("-- HTTP %s response (headers) --",
+			http_method_str(ctx->http.req.method));
+	}
+
 	return 0;
 }
 
@@ -604,8 +607,10 @@ static void http_connected(struct net_app_ctx *app_ctx,
 		return;
 	}
 
-	if (ctx->cb.connect) {
-		ctx->cb.connect(ctx, HTTP_CONNECTION, ctx->user_data);
+	if (ctx->cb.connect && app_ctx->default_ctx) {
+		ctx->cb.connect(ctx, HTTP_CONNECTION,
+				&app_ctx->default_ctx->remote,
+				ctx->user_data);
 	}
 
 	if (ctx->is_connected) {
@@ -643,7 +648,7 @@ int http_client_init(struct http_ctx *ctx,
 {
 	int ret;
 
-	memset(ctx, 0, sizeof(*ctx));
+	(void)memset(ctx, 0, sizeof(*ctx));
 
 	ret = net_app_init_tcp_client(&ctx->app_ctx,
 				      NULL,         /* use any local address */

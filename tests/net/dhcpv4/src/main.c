@@ -6,6 +6,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define LOG_MODULE_NAME net_test
+#define NET_LOG_LEVEL CONFIG_NET_DHCPV4_LOG_LEVEL
+
 #include <zephyr.h>
 #include <linker/sections.h>
 
@@ -233,10 +236,9 @@ static void set_ipv4_header(struct net_pkt *pkt)
 	length = sizeof(offer) + sizeof(struct net_ipv4_hdr) +
 		 sizeof(struct net_udp_hdr);
 
-	ipv4->len[1] = length;
-	ipv4->len[0] = length >> 8;
+	ipv4->len = htons(length);
 
-	memset(ipv4->id, 0, 4); /* id and offset */
+	(void)memset(ipv4->id, 0, 4); /* id and offset */
 
 	ipv4->ttl = 0xFF;
 	ipv4->proto = IPPROTO_UDP;
@@ -467,7 +469,7 @@ static int tester_send(struct net_if *iface, struct net_pkt *pkt)
 	struct net_pkt *rpkt;
 	struct dhcp_msg msg;
 
-	memset(&msg, 0, sizeof(msg));
+	(void)memset(&msg, 0, sizeof(msg));
 
 	if (!pkt->frags) {
 		TC_PRINT("No data to send!\n");
@@ -523,6 +525,11 @@ static struct net_mgmt_event_callback rx_cb;
 static void receiver_cb(struct net_mgmt_event_callback *cb,
 			u32_t nm_event, struct net_if *iface)
 {
+	if (nm_event != NET_EVENT_IPV4_ADDR_ADD) {
+		/* Spurious callback. */
+		return;
+	}
+
 	test_result(true);
 }
 

@@ -1,67 +1,72 @@
 # Folders needed for conf/mconf files (kconfig has no method of redirecting all output files).
-# conf/mconf needs to be run from a different directory because of: ZEP-1963
+# conf/mconf needs to be run from a different directory because of: GH-3408
 file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/kconfig/include/generated)
 file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/kconfig/include/config)
 file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/include/generated)
 
-set_ifndef(KCONFIG_ROOT ${PROJECT_SOURCE_DIR}/Kconfig)
+if(KCONFIG_ROOT)
+  # KCONFIG_ROOT has either been specified as a CMake variable or is
+  # already in the CMakeCache.txt. This has precedence.
+elseif(EXISTS   ${APPLICATION_SOURCE_DIR}/Kconfig)
+  set(KCONFIG_ROOT ${APPLICATION_SOURCE_DIR}/Kconfig)
+else()
+  set(KCONFIG_ROOT ${ZEPHYR_BASE}/Kconfig)
+endif()
 
-#set(BOARD_DEFCONFIG ${PROJECT_SOURCE_DIR}/boards/${ARCH}/${BOARD}/${BOARD}_defconfig)
 set(BOARD_DEFCONFIG ${BOARD_DIR}/${BOARD}_defconfig)
 set(DOTCONFIG       ${PROJECT_BINARY_DIR}/.config)
 
 if(CONF_FILE)
-string(REPLACE " " ";" CONF_FILE_AS_LIST ${CONF_FILE})
+string(REPLACE " " ";" CONF_FILE_AS_LIST "${CONF_FILE}")
 endif()
 
-set(ENV{srctree}            ${PROJECT_SOURCE_DIR})
-set(ENV{KERNELVERSION}      ${PROJECT_VERSION})
+set(ENV{srctree}            ${ZEPHYR_BASE})
+set(ENV{KERNELVERSION}      ${KERNELVERSION})
 set(ENV{KCONFIG_CONFIG}     ${DOTCONFIG})
-set(ENV{KCONFIG_AUTOHEADER} ${AUTOCONF_H})
-
-set(kconfig_target_list
-  config
-  gconfig
-  menuconfig
-  oldconfig
-  xconfig
-  )
-
-set(COMMAND_FOR_config     ${KCONFIG_CONF} --oldaskconfig ${KCONFIG_ROOT})
-set(COMMAND_FOR_gconfig    gconf                          ${KCONFIG_ROOT})
-set(COMMAND_FOR_menuconfig ${KCONFIG_MCONF}               ${KCONFIG_ROOT})
-set(COMMAND_FOR_oldconfig  ${KCONFIG_CONF} --oldconfig    ${KCONFIG_ROOT})
-set(COMMAND_FOR_xconfig    qconf                          ${KCONFIG_ROOT})
 
 # Set environment variables so that Kconfig can prune Kconfig source
 # files for other architectures
-set(ENV{ENV_VAR_ARCH}         ${ARCH})
-set(ENV{ENV_VAR_BOARD_DIR}    ${BOARD_DIR})
+set(ENV{ARCH}      ${ARCH})
+set(ENV{BOARD_DIR} ${BOARD_DIR})
+set(ENV{SOC_DIR}   ${SOC_DIR})
 
-foreach(kconfig_target ${kconfig_target_list})
-  if (NOT WIN32)
-    add_custom_target(
-      ${kconfig_target}
-      ${CMAKE_COMMAND} -E env
-      srctree=${PROJECT_SOURCE_DIR}
-      KERNELVERSION=${PROJECT_VERSION}
-      KCONFIG_CONFIG=${DOTCONFIG}
-      ENV_VAR_ARCH=$ENV{ENV_VAR_ARCH}
-      ENV_VAR_BOARD_DIR=$ENV{ENV_VAR_BOARD_DIR}
-      ${COMMAND_FOR_${kconfig_target}}
-      WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/kconfig
-      USES_TERMINAL
-      )
-  else()
-    add_custom_target(
-      ${kconfig_target}
-      ${CMAKE_COMMAND} -E echo
-        "========================================="
-	"Reconfiguration not supported on Windows."
-        "========================================="
+add_custom_target(
+  menuconfig
+  ${CMAKE_COMMAND} -E env
+  srctree=${ZEPHYR_BASE}
+  KERNELVERSION=${KERNELVERSION}
+  KCONFIG_CONFIG=${DOTCONFIG}
+  ARCH=$ENV{ARCH}
+  BOARD_DIR=$ENV{BOARD_DIR}
+  SOC_DIR=$ENV{SOC_DIR}
+  ${PYTHON_EXECUTABLE} ${ZEPHYR_BASE}/scripts/kconfig/menuconfig.py ${KCONFIG_ROOT}
+  WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/kconfig
+  USES_TERMINAL
+  )
+
+# Support assigning Kconfig symbols on the command-line with CMake
+# cache variables prefixed with 'CONFIG_'. This feature is
+# experimental and undocumented until it has undergone more
+# user-testing.
+unset(EXTRA_KCONFIG_OPTIONS)
+get_cmake_property(cache_variable_names CACHE_VARIABLES)
+foreach (name ${cache_variable_names})
+  if("${name}" MATCHES "^CONFIG_")
+    # When a cache variable starts with 'CONFIG_', it is assumed to be
+    # a CLI Kconfig symbol assignment.
+    set(EXTRA_KCONFIG_OPTIONS
+      "${EXTRA_KCONFIG_OPTIONS}\n${name}=${${name}}"
       )
   endif()
 endforeach()
+
+if(EXTRA_KCONFIG_OPTIONS)
+  set(EXTRA_KCONFIG_OPTIONS_FILE ${PROJECT_BINARY_DIR}/misc/generated/extra_kconfig_options.conf)
+  file(WRITE
+    ${EXTRA_KCONFIG_OPTIONS_FILE}
+    ${EXTRA_KCONFIG_OPTIONS}
+    )
+endif()
 
 # Bring in extra configuration files dropped in by the user or anyone else;
 # make sure they are set at the end so we can override any other setting
@@ -72,6 +77,7 @@ set(
   ${BOARD_DEFCONFIG}
   ${CONF_FILE_AS_LIST}
   ${OVERLAY_CONFIG}
+  ${EXTRA_KCONFIG_OPTIONS_FILE}
   ${config_files}
 )
 
@@ -105,25 +111,30 @@ endforeach()
 # Create a new .config if it does not exists, or if the checksum of
 # the dependencies has changed
 set(merge_config_files_checksum_file ${PROJECT_BINARY_DIR}/.cmake.dotconfig.checksum)
-set(CREATE_NEW_DOTCONFIG "")
-if(NOT EXISTS ${DOTCONFIG})
-  set(CREATE_NEW_DOTCONFIG 1)
-else()
+set(CREATE_NEW_DOTCONFIG 1)
+# Check if the checksum file exists too before trying to open it, though it
+# should under normal circumstances
+if(EXISTS ${DOTCONFIG} AND EXISTS ${merge_config_files_checksum_file})
   # Read out what the checksum was previously
   file(READ
     ${merge_config_files_checksum_file}
     merge_config_files_checksum_prev
     )
-  set(CREATE_NEW_DOTCONFIG 1)
   if(
       ${merge_config_files_checksum} STREQUAL
       ${merge_config_files_checksum_prev}
       )
+    # Checksum is the same as before
     set(CREATE_NEW_DOTCONFIG 0)
   endif()
 endif()
 
 if(CREATE_NEW_DOTCONFIG)
+  file(WRITE
+    ${merge_config_files_checksum_file}
+    ${merge_config_files_checksum}
+    )
+
   set(merge_fragments ${merge_config_files})
 else()
   set(merge_fragments ${DOTCONFIG})
@@ -132,10 +143,10 @@ endif()
 execute_process(
   COMMAND
   ${PYTHON_EXECUTABLE}
-  ${PROJECT_SOURCE_DIR}/scripts/kconfig/kconfig.py
+  ${ZEPHYR_BASE}/scripts/kconfig/kconfig.py
   ${KCONFIG_ROOT}
-  ${PROJECT_BINARY_DIR}/.config
-  ${PROJECT_BINARY_DIR}/include/generated/autoconf.h
+  ${DOTCONFIG}
+  ${AUTOCONF_H}
   ${merge_fragments}
   WORKING_DIRECTORY ${APPLICATION_SOURCE_DIR}
   # The working directory is set to the app dir such that the user
@@ -144,13 +155,6 @@ execute_process(
   )
 if(NOT "${ret}" STREQUAL "0")
   message(FATAL_ERROR "command failed with return code: ${ret}")
-endif()
-
-if(CREATE_NEW_DOTCONFIG)
-  file(WRITE
-    ${merge_config_files_checksum_file}
-    ${merge_config_files_checksum}
-    )
 endif()
 
 # Force CMAKE configure when the configuration files changes.

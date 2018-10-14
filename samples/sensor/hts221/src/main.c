@@ -26,7 +26,7 @@ void main(void)
 			return;
 		}
 
-		if (sensor_channel_get(dev, SENSOR_CHAN_TEMP, &temp) < 0) {
+		if (sensor_channel_get(dev, SENSOR_CHAN_AMBIENT_TEMP, &temp) < 0) {
 			printf("Cannot read HTS221 temperature channel\n");
 			return;
 		}
@@ -39,9 +39,9 @@ void main(void)
 		/* display temperature */
 		printf("Temperature:%.1f C\n", sensor_value_to_double(&temp));
 
-		/* display humidity (converted from millipercent) */
-		printf("Relative Humidity:%.0f%%\n",
-		       sensor_value_to_double(&hum) / 1000);
+		/* display humidity */
+		printf("Relative Humidity:%.1f%%\n",
+		       sensor_value_to_double(&hum));
 
 		k_sleep(2000);
 	}

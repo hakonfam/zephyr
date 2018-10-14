@@ -23,7 +23,7 @@ struct channel_info {
 
 /* change device names if you want to use different sensors */
 static struct channel_info info[] = {
-	{ SENSOR_CHAN_TEMP, "TH02" },
+	{ SENSOR_CHAN_AMBIENT_TEMP, "TH02" },
 	{ SENSOR_CHAN_HUMIDITY, "TH02" },
 };
 
@@ -81,7 +81,7 @@ void main(void)
 		char row[16];
 
 		/* clear LCD */
-		memset(row, ' ', sizeof(row));
+		(void)memset(row, ' ', sizeof(row));
 		glcd_cursor_pos_set(glcd, 0, 0);
 		glcd_print(glcd, row, sizeof(row));
 		glcd_cursor_pos_set(glcd, 0, 1);

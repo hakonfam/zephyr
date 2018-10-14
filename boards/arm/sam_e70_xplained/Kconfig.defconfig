@@ -8,7 +8,7 @@ if BOARD_SAM_E70_XPLAINED
 
 config BOARD
 	string
-	default sam_e70_xplained
+	default "sam_e70_xplained"
 
 if I2S
 config I2S_SAM_SSC
@@ -60,5 +60,15 @@ config I2C_0
 	default y
 
 endif # I2C
+
+if NETWORKING
+
+config NET_L2_ETHERNET
+	def_bool y
+
+config ETH_SAM_GMAC
+	def_bool y if NET_L2_ETHERNET
+
+endif # NETWORKING
 
 endif # BOARD_SAM_E70_XPLAINED

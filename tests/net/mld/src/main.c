@@ -6,6 +6,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define LOG_MODULE_NAME net_test
+#define NET_LOG_LEVEL CONFIG_NET_IPV6_LOG_LEVEL
+
 #include <zephyr/types.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -29,7 +32,7 @@
 #define NET_LOG_ENABLED 1
 #include "net_private.h"
 
-#if defined(CONFIG_NET_IPV6)
+#if defined(CONFIG_NET_IPV6_LOG_LEVEL_DBG)
 #define DBG(fmt, ...) printk(fmt, ##__VA_ARGS__)
 #else
 #define DBG(fmt, ...)
@@ -138,6 +141,11 @@ NET_DEVICE_INIT(net_test_mld, "net_test_mld",
 static void group_joined(struct net_mgmt_event_callback *cb,
 			 u32_t nm_event, struct net_if *iface)
 {
+	if (nm_event != NET_EVENT_IPV6_MCAST_JOIN) {
+		/* Spurious callback. */
+		return;
+	}
+
 	is_group_joined = true;
 
 	k_sem_give(&wait_data);
@@ -146,6 +154,11 @@ static void group_joined(struct net_mgmt_event_callback *cb,
 static void group_left(struct net_mgmt_event_callback *cb,
 			 u32_t nm_event, struct net_if *iface)
 {
+	if (nm_event != NET_EVENT_IPV6_MCAST_LEAVE) {
+		/* Spurious callback. */
+		return;
+	}
+
 	is_group_left = true;
 
 	k_sem_give(&wait_data);
@@ -306,11 +319,11 @@ static void send_query(struct net_if *iface)
 	pkt = net_pkt_get_reserve_tx(net_if_get_ll_reserve(iface, &dst),
 				     K_FOREVER);
 
-	pkt = net_ipv6_create_raw(pkt,
-				  &peer_addr,
-				  &dst,
-				  iface,
-				  NET_IPV6_NEXTHDR_HBHO);
+	pkt = net_ipv6_create(pkt,
+			      &peer_addr,
+			      &dst,
+			      iface,
+			      NET_IPV6_NEXTHDR_HBHO);
 
 	NET_IPV6_HDR(pkt)->hop_limit = 1; /* RFC 3810 ch 7.4 */
 
@@ -342,7 +355,7 @@ static void send_query(struct net_if *iface)
 	net_pkt_append_be16(pkt, 0); /* Resv, S, QRV and QQIC */
 	net_pkt_append_be16(pkt, 0); /* number of addresses */
 
-	net_ipv6_finalize_raw(pkt, NET_IPV6_NEXTHDR_HBHO);
+	net_ipv6_finalize(pkt, NET_IPV6_NEXTHDR_HBHO);
 
 	net_pkt_set_iface(pkt, iface);
 

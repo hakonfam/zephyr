@@ -12,3 +12,5 @@ Developer Guides
    ../reference/kconfig/index.rst
    ../api/api.rst
    ../README.rst
+   ../west/index.rst
+   coccinelle.rst

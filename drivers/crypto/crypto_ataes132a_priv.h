@@ -5,8 +5,8 @@
  *
  */
 
-#ifndef _ATAES132A_PRIV_
-#define _ATAES132A_PRIV_
+#ifndef ZEPHYR_DRIVERS_CRYPTO_CRYPTO_ATAES132A_PRIV_H_
+#define ZEPHYR_DRIVERS_CRYPTO_CRYPTO_ATAES132A_PRIV_H_
 
 #include <i2c.h>
 #include <kernel.h>
@@ -102,7 +102,7 @@
 #define ATAES_MAC_MODE_SERIAL    BIT(6)
 #define ATAES_MAC_MODE_SMALLZONE BIT(7)
 
-#if defined(CONFIG_ATAES132A_I2C_SPEED_STANDARD)
+#if defined(CONFIG_CRYPTO_ATAES132A_I2C_SPEED_STANDARD)
 #define ATAES132A_BUS_SPEED		I2C_SPEED_STANDARD
 #else
 #define ATAES132A_BUS_SPEED		I2C_SPEED_FAST
@@ -391,4 +391,4 @@ int ataes132a_aes_ecb_block(struct device *i2c_dev,
 			    u8_t key_id,
 			    struct cipher_pkt *pkt);
 
-#endif /* _ATAES132A_PRIV_ */
+#endif /* ZEPHYR_DRIVERS_CRYPTO_CRYPTO_ATAES132A_PRIV_H_ */

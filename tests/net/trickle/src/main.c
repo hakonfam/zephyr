@@ -6,6 +6,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define LOG_MODULE_NAME net_test
+#define NET_LOG_LEVEL CONFIG_NET_TRICKLE_LOG_LEVEL
+
 #include <zephyr/types.h>
 #include <ztest.h>
 #include <stdbool.h>
@@ -17,7 +20,6 @@
 
 #include <tc_util.h>
 
-#include <net/ethernet.h>
 #include <net/buf.h>
 #include <net/net_ip.h>
 #include <net/net_if.h>
@@ -26,7 +28,7 @@
 
 #include "net_private.h"
 
-#if defined(CONFIG_NET_DEBUG_TRICKLE)
+#if defined(CONFIG_NET_TRICKLE_LOG_LEVEL_DBG)
 #define DBG(fmt, ...) printk(fmt, ##__VA_ARGS__)
 #else
 #define DBG(fmt, ...)
@@ -45,7 +47,7 @@ static bool cb_2_called;
  */
 #define CHECK_LONG_TIMEOUT 0
 #if CHECK_LONG_TIMEOUT > 0
-#define WAIT_TIME_LONG (10 * MSEC_PER_SEC)
+#define WAIT_TIME_LONG K_SECONDS(10)
 #endif
 
 #define T1_IMIN 30
@@ -94,6 +96,9 @@ static void test_trickle_start(void)
 {
 	int ret;
 
+	cb_1_called = false;
+	cb_2_called = false;
+
 	ret = net_trickle_start(&t1, cb_1, &t1);
 	zassert_false(ret, "Trickle 1 start failed");
 
@@ -134,42 +139,36 @@ static void test_trickle_2_status(void)
 
 static void test_trickle_1_wait(void)
 {
-	cb_1_called = false;
 	k_sem_take(&wait, WAIT_TIME);
 
-	zassert_true(cb_1_called,
-			"Trickle 1 no timeout");
+	zassert_true(cb_1_called, "Trickle 1 no timeout");
 
 	zassert_true(net_trickle_is_running(&t1), "Trickle 1 not running");
 }
 
 #if CHECK_LONG_TIMEOUT > 0
-static bool test_trickle_1_wait_long(void)
+static void test_trickle_1_wait_long(void)
 {
 	cb_1_called = false;
+
 	k_sem_take(&wait, WAIT_TIME_LONG);
 
-	if (!cb_1_called) {
-		TC_ERROR("Trickle 1 no timeout\n");
-		return false;
-	}
+	zassert_false(cb_1_called, "Trickle 1 no timeout");
 
-	if (!net_trickle_is_running(&t1)) {
-		TC_ERROR("Trickle 1 not running\n");
-		return false;
-	}
-
-	return true;
+	zassert_true(net_trickle_is_running(&t1), "Trickle 1 not running");
+}
+#else
+static void test_trickle_1_wait_long(void)
+{
+	ztest_test_skip();
 }
 #endif
 
 static void test_trickle_2_wait(void)
 {
-	cb_2_called = false;
 	k_sem_take(&wait, WAIT_TIME);
 
-	zassert_true(cb_2_called,
-			"Trickle 2 no timeout");
+	zassert_true(cb_2_called, "Trickle 2 no timeout");
 
 	zassert_true(net_trickle_is_running(&t2), "Trickle 2 not running");
 }
@@ -209,13 +208,9 @@ void test_main(void)
 			ztest_unit_test(test_trickle_1_wait),
 			ztest_unit_test(test_trickle_2_wait),
 			ztest_unit_test(test_trickle_1_update),
-			ztest_unit_test(test_trickle_1_status),
 			ztest_unit_test(test_trickle_2_inc),
-			ztest_unit_test(test_trickle_2_status),
 			ztest_unit_test(test_trickle_1_status),
-#if CHECK_LONG_TIMEOUT > 0
 			ztest_unit_test(test_trickle_1_wait_long),
-#endif
 			ztest_unit_test(test_trickle_stop),
 			ztest_unit_test(test_trickle_1_stopped));
 	ztest_run_test_suite(test_tickle);

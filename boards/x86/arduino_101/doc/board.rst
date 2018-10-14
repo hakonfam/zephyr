@@ -281,7 +281,7 @@ by the Zephyr project, so you need to flash a new one onto it.
 
 Luckily, starting with Zephyr 1.6, Zephyr itself is able to act as the firmware
 for the controller. The application you need is ``samples/bluetooth/hci_uart`` and
-the target board is called ``arduino_101_ble``.
+the target board is called ``curie_ble``.
 
 To build the Bluetooth controller image and flash it using ``dfu-util``, first
 set ``ZEPHYR_FLASH_OVER_DFU=y`` in the environment as described above, then
@@ -289,7 +289,7 @@ run:
 
 .. zephyr-app-commands::
    :zephyr-app: samples/bluetooth/hci_uart
-   :board: arduino_101_ble
+   :board: curie_ble
    :goals: build flash
 
 After successfully completing these steps your Arduino 101 should now have a HCI
@@ -406,14 +406,9 @@ Connect to the debug server at the x86 core from a second console:
 Sensor Subsystem Core (ARC)
 ---------------------------
 
-Enable ARC INIT from the x86 core. This can be done by flashing an x86
-application that sets the ``CONFIG_ARC_INIT=y`` option, such as the booting stub
-provided with the Zephyr Test Framework, like so:
-
-.. zephyr-app-commands::
-   :zephyr-app: tests/booting/stub
-   :board: arduino_101
-   :goals: flash
+The sensor subsystem can be enabled from the x86 core (application processor).
+This can be done by flashing an application to the x86 core that sets the
+``CONFIG_ARC_INIT=y`` option.
 
 Then build the ARC application, flash it, and launch a debug server with the
 following commands:

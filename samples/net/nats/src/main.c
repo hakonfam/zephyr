@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define LOG_MODULE_NAME net_nats_app_main
+#define NET_LOG_LEVEL LOG_LEVEL_DBG
+
 #include <board.h>
 #include <gpio.h>
 #include <net/net_context.h>
@@ -14,13 +17,17 @@
 #include "nats.h"
 
 /* LED */
-#if defined(LED0_GPIO_PORT)
-#define LED_GPIO_NAME LED0_GPIO_PORT
-#define LED_PIN LED0_GPIO_PIN
+#ifndef LED0_GPIO_CONTROLLER
+#ifdef LED0_GPIO_PORT
+#define LED0_GPIO_CONTROLLER 	LED0_GPIO_PORT
 #else
-#define LED_GPIO_NAME "(fail)"
-#define LED_PIN 0
+#define LED0_GPIO_CONTROLLER "(fail)"
+#define LED0_GPIO_PIN 0
 #endif
+#endif
+
+#define LED_GPIO_NAME LED0_GPIO_CONTROLLER
+#define LED_PIN LED0_GPIO_PIN
 
 static struct device *led0;
 static bool fake_led;
@@ -32,34 +39,34 @@ static bool fake_led;
 #define NATS_AF_INET		AF_INET6
 #define NATS_SOCKADDR_IN	sockaddr_in6
 
-#if defined(CONFIG_NET_APP_MY_IPV6_ADDR)
-#define NATS_LOCAL_IP_ADDR	CONFIG_NET_APP_MY_IPV6_ADDR
+#if defined(CONFIG_NET_CONFIG_MY_IPV6_ADDR)
+#define NATS_LOCAL_IP_ADDR	CONFIG_NET_CONFIG_MY_IPV6_ADDR
 #else
 #define NATS_LOCAL_IP_ADDR	"2001:db8::1"
-#endif /* CONFIG_NET_APP_MY_IPV6_ADDR */
+#endif /* CONFIG_NET_CONFIG_MY_IPV6_ADDR */
 
-#if defined(CONFIG_NET_APP_PEER_IPV6_ADDR)
-#define NATS_PEER_IP_ADDR	CONFIG_NET_APP_PEER_IPV6_ADDR
+#if defined(CONFIG_NET_CONFIG_PEER_IPV6_ADDR)
+#define NATS_PEER_IP_ADDR	CONFIG_NET_CONFIG_PEER_IPV6_ADDR
 #else
 #define NATS_PEER_IP_ADDR	"2001:db8::2"
-#endif /* CONFIG_NET_APP_PEER_IPV6_ADDR */
+#endif /* CONFIG_NET_CONFIG_PEER_IPV6_ADDR */
 
 #else /* CONFIG_NET_IPV4 */
 
 #define NATS_AF_INET		AF_INET
 #define NATS_SOCKADDR_IN	sockaddr_in
 
-#if defined(CONFIG_NET_APP_MY_IPV4_ADDR)
-#define NATS_LOCAL_IP_ADDR	CONFIG_NET_APP_MY_IPV4_ADDR
+#if defined(CONFIG_NET_CONFIG_MY_IPV4_ADDR)
+#define NATS_LOCAL_IP_ADDR	CONFIG_NET_CONFIG_MY_IPV4_ADDR
 #else
 #define NATS_LOCAL_IP_ADDR	"192.168.0.1"
-#endif /* CONFIG_NET_APP_MY_IPV4_ADDR */
+#endif /* CONFIG_NET_CONFIG_MY_IPV4_ADDR */
 
-#if defined(CONFIG_NET_APP_PEER_IPV4_ADDR)
-#define NATS_PEER_IP_ADDR	CONFIG_NET_APP_PEER_IPV4_ADDR
+#if defined(CONFIG_NET_CONFIG_PEER_IPV4_ADDR)
+#define NATS_PEER_IP_ADDR	CONFIG_NET_CONFIG_PEER_IPV4_ADDR
 #else
 #define NATS_PEER_IP_ADDR	"192.168.0.2"
-#endif /* CONFIG_NET_APP_PEER_IPV4_ADDR */
+#endif /* CONFIG_NET_CONFIG_PEER_IPV4_ADDR */
 
 #endif
 
@@ -99,7 +106,7 @@ static int in_addr_set(sa_family_t family,
 		}
 
 		if (rc < 0) {
-			NET_ERR("Invalid IP address: %s", ip_addr);
+			NET_ERR("Invalid IP address: %s", log_strdup(ip_addr));
 			return -EINVAL;
 		}
 	}
@@ -190,6 +197,7 @@ static void write_led(const struct nats *nats,
 		      bool state)
 {
 	char *pubstate;
+	int ret;
 
 	if (!led0) {
 		fake_led = state;
@@ -198,10 +206,13 @@ static void write_led(const struct nats *nats,
 	}
 
 	pubstate = state ? "on" : "off";
-	nats_publish(nats, "led0", 0, msg->reply_to, 0,
-		     pubstate, strlen(pubstate));
-
-	printk("*** Turning LED %s\n", pubstate);
+	ret = nats_publish(nats, "led0", 0, msg->reply_to, 0,
+			   pubstate, strlen(pubstate));
+	if (ret < 0) {
+		printk("Failed to publish: %d\n", ret);
+	} else {
+		printk("*** Turning LED %s\n", pubstate);
+	}
 }
 
 static int on_msg_received(const struct nats *nats,

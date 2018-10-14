@@ -1,7 +1,9 @@
 /dts-v1/;
 
-#define DT_FLASH_SIZE		__SIZE_K(144)
-#define DT_SRAM_SIZE		__SIZE_K(55)
+#include <mem.h>
+
+#define DT_FLASH_SIZE		DT_SIZE_K(192)
+#define DT_SRAM_SIZE		DT_SIZE_K(52)
 
 #include "intel_curie.dtsi"
 
@@ -10,8 +12,9 @@
 	compatible = "intel,tinytile", "intel,quark_se_c100";
 
 	aliases {
-		uart_0 = &uart0;
-		uart_1 = &uart1;
+		led0 = &led0;
+		uart-0 = &uart0;
+		uart-1 = &uart1;
 	};
 
 	chosen {
@@ -26,6 +29,14 @@
 		zephyr,uart-pipe = &uart1;
 		zephyr,bt-mon-uart = &uart1;
 	};
+
+	leds {
+		compatible = "gpio-leds";
+		led0: led_0 {
+			gpios = <&gpio0 8 0>;
+			label = "LED";
+		};
+	};
 };
 
 &uart0 {
@@ -36,4 +47,14 @@
 &uart1 {
 	status = "ok";
 	current-speed = <115200>;
+};
+
+&i2c0 {
+	status = "ok";
+	clock-frequency = <I2C_BITRATE_FAST>;
+};
+
+&i2c1 {
+	status = "ok";
+	clock-frequency = <I2C_BITRATE_FAST>;
 };

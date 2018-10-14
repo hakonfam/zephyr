@@ -7,8 +7,8 @@
 /** @file sys_log.h
  *  @brief Logging macros.
  */
-#ifndef __SYS_LOG_H
-#define __SYS_LOG_H
+#ifndef ZEPHYR_INCLUDE_LOGGING_SYS_LOG_H_
+#define ZEPHYR_INCLUDE_LOGGING_SYS_LOG_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,8 +36,6 @@ extern "C" {
  * @{
  */
 #if defined(CONFIG_SYS_LOG) && (SYS_LOG_LEVEL > SYS_LOG_LEVEL_OFF)
-
-#define IS_SYS_LOG_ACTIVE 1
 
 extern void (*syslog_hook)(const char *fmt, ...);
 void syslog_hook_install(void (*hook)(const char *, ...));
@@ -124,15 +122,6 @@ void syslog_hook_install(void (*hook)(const char *, ...));
 
 #else
 /**
- * @def IS_SYS_LOG_ACTIVE
- *
- * @brief Specifies whether SYS_LOG is in use or not.
- *
- * @details This macro expands to 1 if SYS_LOG was activated for current .c
- * file, 0 otherwise.
- */
-#define IS_SYS_LOG_ACTIVE 0
-/**
  * @def SYS_LOG_ERR
  *
  * @brief Writes an ERROR level message to the log.
@@ -201,4 +190,4 @@ void syslog_hook_install(void (*hook)(const char *, ...));
 }
 #endif
 
-#endif /* __SYS_LOG_H */
+#endif /* ZEPHYR_INCLUDE_LOGGING_SYS_LOG_H_ */

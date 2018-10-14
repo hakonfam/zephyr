@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef __NET_APP_H
-#define __NET_APP_H
+#ifndef ZEPHYR_INCLUDE_NET_NET_APP_H_
+#define ZEPHYR_INCLUDE_NET_NET_APP_H_
 
 #if defined(CONFIG_NET_APP_TLS) || defined(CONFIG_NET_APP_DTLS)
 #if defined(CONFIG_MBEDTLS)
@@ -55,16 +55,11 @@ extern "C" {
  * @{
  */
 
-/** Flags that tell what kind of functionality is needed by the application. */
-#define NET_APP_NEED_ROUTER 0x00000001
-#define NET_APP_NEED_IPV6   0x00000002
-#define NET_APP_NEED_IPV4   0x00000004
-
 enum net_app_type {
 	NET_APP_UNSPEC = 0,
 	NET_APP_SERVER,
 	NET_APP_CLIENT,
-};
+} __packed;
 
 struct net_app_ctx;
 
@@ -421,7 +416,7 @@ struct net_app_ctx {
 	/** User data pointer */
 	void *user_data;
 
-#if defined(CONFIG_NET_DEBUG_APP)
+#if CONFIG_NET_APP_LOG_LEVEL >= LOG_LEVEL_DBG
 	/** Used when debugging with net-shell */
 	sys_snode_t node;
 #endif
@@ -452,18 +447,6 @@ struct net_app_ctx {
 	/** Unused bits */
 	u8_t _padding : 5;
 };
-
-/**
- * @brief Initialize this network application.
- *
- * @param app_info String describing this application.
- * @param flags Flags related to this application startup.
- * @param timeout How long to wait the network setup before continuing
- * the startup.
- *
- * @return 0 if ok, <0 if error.
- */
-int net_app_init(const char *app_info, u32_t flags, s32_t timeout);
 
 #if defined(CONFIG_NET_CONTEXT_NET_PKT_POOL)
 /**
@@ -856,6 +839,19 @@ struct net_pkt *net_app_get_net_pkt(struct net_app_ctx *ctx,
 				    s32_t timeout);
 
 /**
+ * @brief Create network packet based on dst address.
+ *
+ * @param ctx Network application context.
+ * @param dst Destination address to select net_context
+ * @param timeout How long to wait the send before giving up.
+ *
+ * @return valid net_pkt if ok, NULL if error.
+ */
+struct net_pkt *net_app_get_net_pkt_with_dst(struct net_app_ctx *ctx,
+					     const struct sockaddr *dst,
+					     s32_t timeout);
+
+/**
  * @brief Create network buffer that will hold network data.
  *
  * @details The returned net_buf is automatically appended to the
@@ -987,14 +983,12 @@ int net_app_server_tls(struct net_app_ctx *ctx,
  * @}
  */
 
-#if defined(CONFIG_NET_DEBUG_APP)
 typedef void (*net_app_ctx_cb_t)(struct net_app_ctx *ctx, void *user_data);
 void net_app_server_foreach(net_app_ctx_cb_t cb, void *user_data);
 void net_app_client_foreach(net_app_ctx_cb_t cb, void *user_data);
-#endif /* CONFIG_NET_DEBUG_APP */
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __NET_APP_H */
+#endif /* ZEPHYR_INCLUDE_NET_NET_APP_H_ */

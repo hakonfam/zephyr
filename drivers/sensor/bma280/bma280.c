@@ -87,7 +87,7 @@ static int bma280_channel_get(struct device *dev,
 		bma280_channel_accel_convert(val, drv_data->x_sample);
 		bma280_channel_accel_convert(val + 1, drv_data->y_sample);
 		bma280_channel_accel_convert(val + 2, drv_data->z_sample);
-	} else if (chan == SENSOR_CHAN_TEMP) {
+	} else if (chan == SENSOR_CHAN_DIE_TEMP) {
 		/* temperature_val = 23 + sample / 2 */
 		val->val1 = (drv_data->temp_sample >> 1) + 23;
 		val->val2 = 500000 * (drv_data->temp_sample & 1);
@@ -152,12 +152,11 @@ int bma280_init(struct device *dev)
 	}
 #endif
 
-	dev->driver_api = &bma280_driver_api;
-
 	return 0;
 }
 
 struct bma280_data bma280_driver;
 
-DEVICE_INIT(bma280, CONFIG_BMA280_NAME, bma280_init, &bma280_driver,
-	    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY);
+DEVICE_AND_API_INIT(bma280, CONFIG_BMA280_NAME, bma280_init, &bma280_driver,
+		    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
+		    &bma280_driver_api);

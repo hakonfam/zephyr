@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef __BYTEORDER_H__
-#define __BYTEORDER_H__
+#ifndef ZEPHYR_INCLUDE_MISC_BYTEORDER_H_
+#define ZEPHYR_INCLUDE_MISC_BYTEORDER_H_
 
 #include <zephyr/types.h>
 #include <stddef.h>
@@ -289,14 +289,17 @@ static inline u64_t sys_get_le64(const u8_t src[8])
  */
 static inline void sys_memcpy_swap(void *dst, const void *src, size_t length)
 {
-	__ASSERT(((src < dst && (src + length) <= dst) ||
-		  (src > dst && (dst + length) <= src)),
+	u8_t *pdst = (u8_t *)dst;
+	const u8_t *psrc = (const u8_t *)src;
+
+	__ASSERT(((psrc < pdst && (psrc + length) <= pdst) ||
+		  (psrc > pdst && (pdst + length) <= psrc)),
 		 "Source and destination buffers must not overlap");
 
-	src += length - 1;
+	psrc += length - 1;
 
 	for (; length > 0; length--) {
-		*((u8_t *)dst++) = *((u8_t *)src--);
+		*pdst++ = *psrc--;
 	}
 }
 
@@ -322,4 +325,4 @@ static inline void sys_mem_swap(void *buf, size_t length)
 	}
 }
 
-#endif /* __BYTEORDER_H__ */
+#endif /* ZEPHYR_INCLUDE_MISC_BYTEORDER_H_ */

@@ -161,8 +161,19 @@ static inline bool verify_tail_head(sys_dlist_t *list,
 
 	return true;
 }
+/**
+ * @addtogroup kernel_common_tests
+ * @{
+ */
 
-void dlist_test(void)
+/**
+ * @brief Verify doubly linked list funtionalities
+ *
+ * @see sys_dlist_append(), sys_dlist_remove(), sys_dlist_prepend(),
+ * sys_dlist_remove(), sys_dlist_insert_after(), sys_dlist_peek_next()
+ * SYS_DLIST_ITERATE_FROM_NODE()
+ */
+void test_dlist(void)
 {
 	sys_dlist_init(&test_list);
 
@@ -311,3 +322,7 @@ void dlist_test(void)
 	}
 	zassert_equal(ii, 2, "");
 }
+
+/**
+ * @}
+ */

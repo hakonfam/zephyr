@@ -6,8 +6,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef _SENSOR_BMM150_H_
-#define _SENSOR_BMM150_H_
+#ifndef ZEPHYR_DRIVERS_SENSOR_BMM150_BMM150_H_
+#define ZEPHYR_DRIVERS_SENSOR_BMM150_BMM150_H_
 
 
 #include <zephyr/types.h>
@@ -90,7 +90,7 @@
 	#define BMM150_SET_ATTR_REP
 #endif
 
-#if defined(CONFIG_BMM150_MAGN_SAMPLING_RATE_RUNTIME) || \
+#if defined(CONFIG_BMM150_SAMPLING_RATE_RUNTIME) || \
 	defined(BMM150_MAGN_SET_ATTR_REP)
 	#define BMM150_MAGN_SET_ATTR
 #endif

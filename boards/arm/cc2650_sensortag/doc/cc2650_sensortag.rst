@@ -135,7 +135,7 @@ CCFG ("Customer Configuration" area). A 32-bit word in this area,
 pass control to your program. You can find more information on the CCFG
 in the `CC2650 reference manual`_, section 9.1. The current CC2650 port
 for Zephyr already does this by default; if you wish to check or modify
-the CCFG content, see :file:`arch/arm/soc/ti_simplelink/cc2650/soc.c`.
+the CCFG content, see :file:`soc/arm/ti_simplelink/cc2650/soc.c`.
 
 Building
 ========
@@ -206,10 +206,10 @@ TI CC2650 datasheet:
   http://www.ti.com/lit/ds/symlink/cc2650.pdf
 
 CC2650 reference manual:
-  http://www.ti.com/lit/ug/swcu117g/swcu117g.pdf
+  http://www.ti.com/lit/ug/swcu117h/swcu117h.pdf
 
 Uniflash 3.4 release notes:
   http://processors.wiki.ti.com/index.php/CCS_UniFlash_v3.4.1_Release_Notes
 
 .. _CC2650 reference manual:
-  http://www.ti.com/lit/ug/swcu117g/swcu117g.pdf
+  http://www.ti.com/lit/ug/swcu117h/swcu117h.pdf

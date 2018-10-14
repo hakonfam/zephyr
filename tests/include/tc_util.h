@@ -12,7 +12,7 @@
 #include <zephyr.h>
 
 #include <string.h>
-#include <shell/shell.h>
+#include <shell/legacy_shell.h>
 
 #if defined(CONFIG_STDOUT_CONSOLE)
 #include <stdio.h>
@@ -27,7 +27,7 @@
 #endif
 
 /**
- * @def TC_PRINT_RUN_ID
+ * @def TC_PRINT_RUNID
  * @brief Report a Run ID
  *
  * When the CPP symbol \c TC_RUNID is defined (for example, from the
@@ -57,16 +57,23 @@
 /* stack size and priority for test suite task */
 #define TASK_STACK_SIZE (1024 * 2)
 
-#define FAIL "FAIL"
-#define PASS "PASS"
 #define FMT_ERROR "%s - %s@%d. "
 
 #define TC_PASS 0
 #define TC_FAIL 1
+#define TC_SKIP 2
+
+static __unused const char *TC_RESULT_STR[] = {
+	[TC_PASS] = "PASS",
+	[TC_FAIL] = "FAIL",
+	[TC_SKIP] = "SKIP",
+};
+
+#define TC_RESULT_TO_STR(result) TC_RESULT_STR[result]
 
 #define TC_ERROR(fmt, ...)                               \
 	do {                                                 \
-		PRINT_DATA(FMT_ERROR, FAIL, __func__, __LINE__); \
+		PRINT_DATA(FMT_ERROR, "FAIL", __func__, __LINE__); \
 		PRINT_DATA(fmt, ##__VA_ARGS__);                  \
 	} while (0)
 
@@ -77,14 +84,17 @@
 /* prints result and the function name */
 #define _TC_END_RESULT(result, func)					\
 	do {								\
-		TC_END(result, "%s - %s.\n",				\
-		       (result) == TC_PASS ? PASS : FAIL, func);	\
+		TC_END(result, "%s - %s\n", TC_RESULT_TO_STR(result), func); \
 		PRINT_LINE;						\
 	} while (0)
 #define TC_END_RESULT(result)                           \
 	_TC_END_RESULT((result), __func__)
 
-#define TC_END_POST
+#if defined(CONFIG_ARCH_POSIX)
+#define TC_END_POST(result) posix_exit(result)
+#else
+#define TC_END_POST(result)
+#endif /* CONFIG_ARCH_POSIX */
 
 #define TC_END_REPORT(result)                               \
 	do {                                                    \
@@ -93,7 +103,7 @@
 		TC_END(result,                                      \
 		       "PROJECT EXECUTION %s\n",               \
 		       (result) == TC_PASS ? "SUCCESSFUL" : "FAILED");	\
-		TC_END_POST;                                            \
+		TC_END_POST(result);                                    \
 	} while (0)
 
 #define TC_CMD_DEFINE(name)				\

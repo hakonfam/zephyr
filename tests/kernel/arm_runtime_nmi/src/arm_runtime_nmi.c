@@ -4,16 +4,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * @brief Test to verify the behavior of CONFIG_RUNTIME_NMI at runtime.
- */
-
 #include <zephyr.h>
 #include <misc/printk.h>
 #include <misc/reboot.h>
 #include <arch/arm/cortex_m/cmsis.h>
 #include <ztest.h>
 #include <tc_util.h>
+
+/* on v8m arch the nmi pend bit is renamed to pend nmi map it to old name */
+#ifndef SCB_ICSR_NMIPENDSET_Msk
+#define SCB_ICSR_NMIPENDSET_Msk SCB_ICSR_PENDNMISET_Msk
+#endif
 
 extern void _NmiHandlerSet(void (*pHandler)(void));
 
@@ -25,6 +26,25 @@ static void nmi_test_isr(void)
 	TC_END_REPORT(TC_PASS);
 }
 
+/**
+ * @brief Test the behavior of CONFIG_RUNTIME_NMI at runtime.
+ * @addtogroup kernel_interrupt_tests
+ * @ingroup all_tests
+ * @{
+ */
+
+
+/**
+ * @brief test the behavior of CONFIG_RUNTIME_NMI at run time
+ *
+ * @details this test is to validate _NmiHandlerSet() api.
+ * First we configure the NMI isr using _NmiHandlerSet() api.
+ * After wait for some time, and set the  Interrupt Control and
+ * State Register(ICSR) of System control block (SCB).
+ * The registered NMI isr should fire immediately.
+ *
+ * @see _NmiHandlerSet()
+ */
 void test_arm_runtime_nmi(void)
 {
 	u32_t i = 0;
@@ -41,3 +61,6 @@ void test_arm_runtime_nmi(void)
 	/* Trigger NMI: Should fire immediately */
 	SCB->ICSR |= SCB_ICSR_NMIPENDSET_Msk;
 }
+/**
+ * @}
+ */

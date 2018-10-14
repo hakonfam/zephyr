@@ -18,6 +18,7 @@ enum bt_mesh_adv_type {
 	BT_MESH_ADV_PROV,
 	BT_MESH_ADV_DATA,
 	BT_MESH_ADV_BEACON,
+	BT_MESH_ADV_URI,
 };
 
 typedef void (*bt_mesh_adv_func_t)(struct net_buf *buf, u16_t duration,
@@ -29,8 +30,8 @@ struct bt_mesh_adv {
 
 	u8_t      type:2,
 		  busy:1;
-	u8_t      count:3,
-		  adv_int:5;
+	u8_t      xmit;
+
 	union {
 		/* Address, used e.g. for Friend Queue messages */
 		u16_t addr;
@@ -45,14 +46,13 @@ struct bt_mesh_adv {
 typedef struct bt_mesh_adv *(*bt_mesh_adv_alloc_t)(int id);
 
 /* xmit_count: Number of retransmissions, i.e. 0 == 1 transmission */
-struct net_buf *bt_mesh_adv_create(enum bt_mesh_adv_type type, u8_t xmit_count,
-				   u8_t xmit_int, s32_t timeout);
+struct net_buf *bt_mesh_adv_create(enum bt_mesh_adv_type type, u8_t xmit,
+				   s32_t timeout);
 
 struct net_buf *bt_mesh_adv_create_from_pool(struct net_buf_pool *pool,
 					     bt_mesh_adv_alloc_t get_id,
 					     enum bt_mesh_adv_type type,
-					     u8_t xmit_count, u8_t xmit_int,
-					     s32_t timeout);
+					     u8_t xmit, s32_t timeout);
 
 void bt_mesh_adv_send(struct net_buf *buf, const struct bt_mesh_send_cb *cb,
 		      void *cb_data);

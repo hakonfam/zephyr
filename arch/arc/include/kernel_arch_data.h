@@ -17,8 +17,8 @@
  * symbols" in the offsets.o module.
  */
 
-#ifndef _kernel_arch_data__h_
-#define _kernel_arch_data__h_
+#ifndef ZEPHYR_ARCH_ARC_INCLUDE_KERNEL_ARCH_DATA_H_
+#define ZEPHYR_ARCH_ARC_INCLUDE_KERNEL_ARCH_DATA_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -129,6 +129,15 @@ struct _callee_saved_stack {
 	u32_t r25;
 	u32_t r26;
 	u32_t fp; /* r27 */
+
+#ifdef CONFIG_USERSPACE
+#ifdef CONFIG_ARC_HAS_SECURE
+	u32_t user_sp;
+	u32_t kernel_sp;
+#else
+	u32_t user_sp;
+#endif
+#endif
 	/* r28 is the stack pointer and saved separately */
 	/* r29 is ILINK and does not need to be saved */
 	u32_t r30;
@@ -179,4 +188,4 @@ typedef struct _kernel_arch _kernel_arch_t;
 }
 #endif
 
-#endif /* _kernel_arch_data__h_ */
+#endif /* ZEPHYR_ARCH_ARC_INCLUDE_KERNEL_ARCH_DATA_H_ */

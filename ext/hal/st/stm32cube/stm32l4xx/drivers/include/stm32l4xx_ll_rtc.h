@@ -103,19 +103,19 @@ typedef struct
 {
   uint32_t HourFormat;   /*!< Specifies the RTC Hours Format.
                               This parameter can be a value of @ref RTC_LL_EC_HOURFORMAT
-                              
+
                               This feature can be modified afterwards using unitary function
                               @ref LL_RTC_SetHourFormat(). */
 
   uint32_t AsynchPrescaler; /*!< Specifies the RTC Asynchronous Predivider value.
                               This parameter must be a number between Min_Data = 0x00 and Max_Data = 0x7F
-                              
+
                               This feature can be modified afterwards using unitary function
                               @ref LL_RTC_SetAsynchPrescaler(). */
 
   uint32_t SynchPrescaler;  /*!< Specifies the RTC Synchronous Predivider value.
                               This parameter must be a number between Min_Data = 0x00 and Max_Data = 0x7FFF
-                              
+
                               This feature can be modified afterwards using unitary function
                               @ref LL_RTC_SetSynchPrescaler(). */
 } LL_RTC_InitTypeDef;
@@ -183,7 +183,7 @@ typedef struct
   uint32_t AlarmMask;            /*!< Specifies the RTC Alarm Masks.
                                       This parameter can be a value of @ref RTC_LL_EC_ALMA_MASK for ALARM A or @ref RTC_LL_EC_ALMB_MASK for ALARM B.
 
-                                      This feature can be modified afterwards using unitary function @ref LL_RTC_ALMA_SetMask() for ALARM A 
+                                      This feature can be modified afterwards using unitary function @ref LL_RTC_ALMA_SetMask() for ALARM A
                                       or @ref LL_RTC_ALMB_SetMask() for ALARM B
                                  */
 
@@ -618,7 +618,7 @@ typedef struct
   * @}
   */
 
-/** @defgroup RTC_LL_EC_CALIB_INSERTPULSE  Calibration pulse insertion 
+/** @defgroup RTC_LL_EC_CALIB_INSERTPULSE  Calibration pulse insertion
   * @{
   */
 #define LL_RTC_CALIB_INSERTPULSE_NONE      0x00000000U           /*!< No RTCCLK pulses are added */
@@ -1158,10 +1158,7 @@ __STATIC_INLINE void LL_RTC_TIME_SetHour(RTC_TypeDef *RTCx, uint32_t Hours)
   */
 __STATIC_INLINE uint32_t LL_RTC_TIME_GetHour(RTC_TypeDef *RTCx)
 {
-  register uint32_t temp = 0U;
-
-  temp = READ_BIT(RTCx->TR, (RTC_TR_HT | RTC_TR_HU));
-  return (uint32_t)((((temp & RTC_TR_HT) >> RTC_TR_HT_Pos) << 4U) | ((temp & RTC_TR_HU) >> RTC_TR_HU_Pos));
+  return ((READ_BIT(RTCx->TR, (RTC_TR_HT | RTC_TR_HU))) >> RTC_TR_HU_Pos);
 }
 
 /**
@@ -1196,10 +1193,7 @@ __STATIC_INLINE void LL_RTC_TIME_SetMinute(RTC_TypeDef *RTCx, uint32_t Minutes)
   */
 __STATIC_INLINE uint32_t LL_RTC_TIME_GetMinute(RTC_TypeDef *RTCx)
 {
-  register uint32_t temp = 0U;
-
-  temp = READ_BIT(RTCx->TR, (RTC_TR_MNT | RTC_TR_MNU));
-  return (uint32_t)((((temp & RTC_TR_MNT) >> RTC_TR_MNT_Pos) << 4U) | ((temp & RTC_TR_MNU) >> RTC_TR_MNU_Pos));
+  return ((READ_BIT(RTCx->TR, (RTC_TR_MNT | RTC_TR_MNU)))>> RTC_TR_MNU_Pos);
 }
 
 /**
@@ -1234,10 +1228,7 @@ __STATIC_INLINE void LL_RTC_TIME_SetSecond(RTC_TypeDef *RTCx, uint32_t Seconds)
   */
 __STATIC_INLINE uint32_t LL_RTC_TIME_GetSecond(RTC_TypeDef *RTCx)
 {
-  register uint32_t temp = 0U;
-
-  temp = READ_BIT(RTCx->TR, (RTC_TR_ST | RTC_TR_SU));
-  return (uint32_t)((((temp & RTC_TR_ST) >> RTC_TR_ST_Pos) << 4U) | ((temp & RTC_TR_SU) >> RTC_TR_SU_Pos));
+  return ((READ_BIT(RTCx->TR, (RTC_TR_ST | RTC_TR_SU))) >> RTC_TR_SU_Pos);
 }
 
 /**
@@ -1292,7 +1283,7 @@ __STATIC_INLINE void LL_RTC_TIME_Config(RTC_TypeDef *RTCx, uint32_t Format12_24,
 __STATIC_INLINE uint32_t LL_RTC_TIME_Get(RTC_TypeDef *RTCx)
 {
   register uint32_t temp = 0U;
-  
+
   temp = READ_BIT(RTCx->TR, (RTC_TR_HT | RTC_TR_HU | RTC_TR_MNT | RTC_TR_MNU | RTC_TR_ST | RTC_TR_SU));
   return (uint32_t)((((((temp & RTC_TR_HT) >> RTC_TR_HT_Pos) << 4U) | ((temp & RTC_TR_HU) >> RTC_TR_HU_Pos)) << RTC_OFFSET_HOUR) |  \
                     (((((temp & RTC_TR_MNT) >> RTC_TR_MNT_Pos) << 4U) | ((temp & RTC_TR_MNU) >> RTC_TR_MNU_Pos)) << RTC_OFFSET_MINUTE) | \
@@ -1430,10 +1421,7 @@ __STATIC_INLINE void LL_RTC_DATE_SetYear(RTC_TypeDef *RTCx, uint32_t Year)
   */
 __STATIC_INLINE uint32_t LL_RTC_DATE_GetYear(RTC_TypeDef *RTCx)
 {
-  register uint32_t temp = 0U;
-
-  temp = READ_BIT(RTCx->DR, (RTC_DR_YT | RTC_DR_YU));
-  return (uint32_t)((((temp & RTC_DR_YT) >> RTC_DR_YT_Pos) << 4U) | ((temp & RTC_DR_YU) >> RTC_DR_YU_Pos));
+  return ((READ_BIT(RTCx->DR, (RTC_DR_YT | RTC_DR_YU))) >> RTC_DR_YU_Pos);
 }
 
 /**
@@ -1526,10 +1514,7 @@ __STATIC_INLINE void LL_RTC_DATE_SetMonth(RTC_TypeDef *RTCx, uint32_t Month)
   */
 __STATIC_INLINE uint32_t LL_RTC_DATE_GetMonth(RTC_TypeDef *RTCx)
 {
-  register uint32_t temp = 0U;
-
-  temp = READ_BIT(RTCx->DR, (RTC_DR_MT | RTC_DR_MU));
-  return (uint32_t)((((temp & RTC_DR_MT) >> RTC_DR_MT_Pos) << 4U) | ((temp & RTC_DR_MU) >> RTC_DR_MU_Pos));
+  return ((READ_BIT(RTCx->DR, (RTC_DR_MT | RTC_DR_MU)))>> RTC_DR_MU_Pos);
 }
 
 /**
@@ -1559,10 +1544,7 @@ __STATIC_INLINE void LL_RTC_DATE_SetDay(RTC_TypeDef *RTCx, uint32_t Day)
   */
 __STATIC_INLINE uint32_t LL_RTC_DATE_GetDay(RTC_TypeDef *RTCx)
 {
-  register uint32_t temp = 0U;
-
-  temp = READ_BIT(RTCx->DR, (RTC_DR_DT | RTC_DR_DU));
-  return (uint32_t)((((temp & RTC_DR_DT) >> RTC_DR_DT_Pos) << 4U) | ((temp & RTC_DR_DU) >> RTC_DR_DU_Pos));
+  return ((READ_BIT(RTCx->DR, (RTC_DR_DT | RTC_DR_DU))) >> RTC_DR_DU_Pos);
 }
 
 /**
@@ -1631,7 +1613,7 @@ __STATIC_INLINE void LL_RTC_DATE_Config(RTC_TypeDef *RTCx, uint32_t WeekDay, uin
 __STATIC_INLINE uint32_t LL_RTC_DATE_Get(RTC_TypeDef *RTCx)
 {
   register uint32_t temp = 0U;
-  
+
   temp = READ_BIT(RTCx->DR, (RTC_DR_WDU | RTC_DR_MT | RTC_DR_MU | RTC_DR_DT | RTC_DR_DU | RTC_DR_YT | RTC_DR_YU));
   return (uint32_t)((((temp & RTC_DR_WDU) >> RTC_DR_WDU_Pos) << RTC_OFFSET_WEEKDAY) | \
                     (((((temp & RTC_DR_DT) >> RTC_DR_DT_Pos) << 4U) | ((temp & RTC_DR_DU) >> RTC_DR_DU_Pos)) << RTC_OFFSET_DAY) | \
@@ -1759,10 +1741,7 @@ __STATIC_INLINE void LL_RTC_ALMA_SetDay(RTC_TypeDef *RTCx, uint32_t Day)
   */
 __STATIC_INLINE uint32_t LL_RTC_ALMA_GetDay(RTC_TypeDef *RTCx)
 {
-  register uint32_t temp = 0U;
-
-  temp = READ_BIT(RTCx->ALRMAR, (RTC_ALRMAR_DT | RTC_ALRMAR_DU));
-  return (uint32_t)((((temp & RTC_ALRMAR_DT) >> RTC_ALRMAR_DT_Pos) << 4U) | ((temp & RTC_ALRMAR_DU) >> RTC_ALRMAR_DU_Pos));
+  return ((READ_BIT(RTCx->ALRMAR, (RTC_ALRMAR_DT | RTC_ALRMAR_DU))) >> RTC_ALRMAR_DU_Pos);
 }
 
 /**
@@ -1854,10 +1833,7 @@ __STATIC_INLINE void LL_RTC_ALMA_SetHour(RTC_TypeDef *RTCx, uint32_t Hours)
   */
 __STATIC_INLINE uint32_t LL_RTC_ALMA_GetHour(RTC_TypeDef *RTCx)
 {
-  register uint32_t temp = 0U;
-
-  temp = READ_BIT(RTCx->ALRMAR, (RTC_ALRMAR_HT | RTC_ALRMAR_HU));
-  return (uint32_t)((((temp & RTC_ALRMAR_HT) >> RTC_ALRMAR_HT_Pos) << 4U) | ((temp & RTC_ALRMAR_HU) >> RTC_ALRMAR_HU_Pos));
+  return ((READ_BIT(RTCx->ALRMAR, (RTC_ALRMAR_HT | RTC_ALRMAR_HU))) >> RTC_ALRMAR_HU_Pos);
 }
 
 /**
@@ -1885,10 +1861,7 @@ __STATIC_INLINE void LL_RTC_ALMA_SetMinute(RTC_TypeDef *RTCx, uint32_t Minutes)
   */
 __STATIC_INLINE uint32_t LL_RTC_ALMA_GetMinute(RTC_TypeDef *RTCx)
 {
-  register uint32_t temp = 0U;
-
-  temp = READ_BIT(RTCx->ALRMAR, (RTC_ALRMAR_MNT | RTC_ALRMAR_MNU));
-  return (uint32_t)((((temp & RTC_ALRMAR_MNT) >> RTC_ALRMAR_MNT_Pos) << 4U) | ((temp & RTC_ALRMAR_MNU) >> RTC_ALRMAR_MNU_Pos));
+  return ((READ_BIT(RTCx->ALRMAR, (RTC_ALRMAR_MNT | RTC_ALRMAR_MNU))) >> RTC_ALRMAR_MNU_Pos);
 }
 
 /**
@@ -1916,10 +1889,7 @@ __STATIC_INLINE void LL_RTC_ALMA_SetSecond(RTC_TypeDef *RTCx, uint32_t Seconds)
   */
 __STATIC_INLINE uint32_t LL_RTC_ALMA_GetSecond(RTC_TypeDef *RTCx)
 {
-  register uint32_t temp = 0U;
-
-  temp = READ_BIT(RTCx->ALRMAR, (RTC_ALRMAR_ST | RTC_ALRMAR_SU));
-  return (uint32_t)((((temp & RTC_ALRMAR_ST) >> RTC_ALRMAR_ST_Pos) << 4U) | ((temp & RTC_ALRMAR_SU) >> RTC_ALRMAR_SU_Pos));
+  return ((READ_BIT(RTCx->ALRMAR, (RTC_ALRMAR_ST | RTC_ALRMAR_SU))) >> RTC_ALRMAR_SU_Pos);
 }
 
 /**
@@ -2137,10 +2107,7 @@ __STATIC_INLINE void LL_RTC_ALMB_SetDay(RTC_TypeDef *RTCx, uint32_t Day)
   */
 __STATIC_INLINE uint32_t LL_RTC_ALMB_GetDay(RTC_TypeDef *RTCx)
 {
-  register uint32_t temp = 0U;
-
-  temp = READ_BIT(RTCx->ALRMBR, (RTC_ALRMBR_DT | RTC_ALRMBR_DU));
-  return (uint32_t)((((temp & RTC_ALRMBR_DT) >> RTC_ALRMBR_DT_Pos) << 4U) | ((temp & RTC_ALRMBR_DU) >> RTC_ALRMBR_DU_Pos));
+  return ((READ_BIT(RTCx->ALRMBR, (RTC_ALRMBR_DT | RTC_ALRMBR_DU))) >> RTC_ALRMBR_DU_Pos);
 }
 
 /**
@@ -2232,10 +2199,7 @@ __STATIC_INLINE void LL_RTC_ALMB_SetHour(RTC_TypeDef *RTCx, uint32_t Hours)
   */
 __STATIC_INLINE uint32_t LL_RTC_ALMB_GetHour(RTC_TypeDef *RTCx)
 {
-  register uint32_t temp = 0U;
-
-  temp = READ_BIT(RTCx->ALRMBR, (RTC_ALRMBR_HT | RTC_ALRMBR_HU));
-  return (uint32_t)((((temp & RTC_ALRMBR_HT) >> RTC_ALRMBR_HT_Pos) << 4U) | ((temp & RTC_ALRMBR_HU) >> RTC_ALRMBR_HU_Pos));
+  return ((READ_BIT(RTCx->ALRMBR, (RTC_ALRMBR_HT | RTC_ALRMBR_HU))) >> RTC_ALRMBR_HU_Pos);
 }
 
 /**
@@ -2263,10 +2227,7 @@ __STATIC_INLINE void LL_RTC_ALMB_SetMinute(RTC_TypeDef *RTCx, uint32_t Minutes)
   */
 __STATIC_INLINE uint32_t LL_RTC_ALMB_GetMinute(RTC_TypeDef *RTCx)
 {
-  register uint32_t temp = 0U;
-
-  temp = READ_BIT(RTCx->ALRMBR, (RTC_ALRMBR_MNT | RTC_ALRMBR_MNU));
-  return (uint32_t)((((temp & RTC_ALRMBR_MNT) >> RTC_ALRMBR_MNT_Pos) << 4U) | ((temp & RTC_ALRMBR_MNU) >> RTC_ALRMBR_MNU_Pos));
+  return ((READ_BIT(RTCx->ALRMBR, (RTC_ALRMBR_MNT | RTC_ALRMBR_MNU))) >> RTC_ALRMBR_MNU_Pos);
 }
 
 /**
@@ -2294,10 +2255,7 @@ __STATIC_INLINE void LL_RTC_ALMB_SetSecond(RTC_TypeDef *RTCx, uint32_t Seconds)
   */
 __STATIC_INLINE uint32_t LL_RTC_ALMB_GetSecond(RTC_TypeDef *RTCx)
 {
-  register uint32_t temp = 0U;
-
-  temp = READ_BIT(RTCx->ALRMBR, (RTC_ALRMBR_ST | RTC_ALRMBR_SU));
-  return (uint32_t)((((temp & RTC_ALRMBR_ST) >> RTC_ALRMBR_ST_Pos) << 4U) | ((temp & RTC_ALRMBR_SU) >> RTC_ALRMBR_SU_Pos));
+  return ((READ_BIT(RTCx->ALRMBR, (RTC_ALRMBR_ST | RTC_ALRMBR_SU))) >> RTC_ALRMBR_SU_Pos);
 }
 
 /**
@@ -2675,10 +2633,10 @@ __STATIC_INLINE void LL_RTC_TS_DisableOnTamper(RTC_TypeDef *RTCx)
   *         TAMPCR       TAMP3E        LL_RTC_TAMPER_Enable
   * @param  RTCx RTC Instance
   * @param  Tamper This parameter can be a combination of the following values:
-  *         @arg @ref LL_RTC_TAMPER_1 
-  *         @arg @ref LL_RTC_TAMPER_2 
-  *         @arg @ref LL_RTC_TAMPER_3 
-  *         
+  *         @arg @ref LL_RTC_TAMPER_1
+  *         @arg @ref LL_RTC_TAMPER_2
+  *         @arg @ref LL_RTC_TAMPER_3
+  *
   * @retval None
   */
 __STATIC_INLINE void LL_RTC_TAMPER_Enable(RTC_TypeDef *RTCx, uint32_t Tamper)
@@ -2693,10 +2651,10 @@ __STATIC_INLINE void LL_RTC_TAMPER_Enable(RTC_TypeDef *RTCx, uint32_t Tamper)
   *         TAMPCR       TAMP3E        LL_RTC_TAMPER_Disable
   * @param  RTCx RTC Instance
   * @param  Tamper This parameter can be a combination of the following values:
-  *         @arg @ref LL_RTC_TAMPER_1 
-  *         @arg @ref LL_RTC_TAMPER_2 
-  *         @arg @ref LL_RTC_TAMPER_3 
-  *         
+  *         @arg @ref LL_RTC_TAMPER_1
+  *         @arg @ref LL_RTC_TAMPER_2
+  *         @arg @ref LL_RTC_TAMPER_3
+  *
   * @retval None
   */
 __STATIC_INLINE void LL_RTC_TAMPER_Disable(RTC_TypeDef *RTCx, uint32_t Tamper)
@@ -2712,10 +2670,10 @@ __STATIC_INLINE void LL_RTC_TAMPER_Disable(RTC_TypeDef *RTCx, uint32_t Tamper)
   *         TAMPCR       TAMP3MF       LL_RTC_TAMPER_EnableMask
   * @param  RTCx RTC Instance
   * @param  Mask This parameter can be a combination of the following values:
-  *         @arg @ref LL_RTC_TAMPER_MASK_TAMPER1 
-  *         @arg @ref LL_RTC_TAMPER_MASK_TAMPER2 
-  *         @arg @ref LL_RTC_TAMPER_MASK_TAMPER3 
-  *         
+  *         @arg @ref LL_RTC_TAMPER_MASK_TAMPER1
+  *         @arg @ref LL_RTC_TAMPER_MASK_TAMPER2
+  *         @arg @ref LL_RTC_TAMPER_MASK_TAMPER3
+  *
   * @retval None
   */
 __STATIC_INLINE void LL_RTC_TAMPER_EnableMask(RTC_TypeDef *RTCx, uint32_t Mask)
@@ -2730,10 +2688,10 @@ __STATIC_INLINE void LL_RTC_TAMPER_EnableMask(RTC_TypeDef *RTCx, uint32_t Mask)
   *         TAMPCR       TAMP3MF       LL_RTC_TAMPER_DisableMask
   * @param  RTCx RTC Instance
   * @param  Mask This parameter can be a combination of the following values:
-  *         @arg @ref LL_RTC_TAMPER_MASK_TAMPER1 
-  *         @arg @ref LL_RTC_TAMPER_MASK_TAMPER2 
-  *         @arg @ref LL_RTC_TAMPER_MASK_TAMPER3 
-  *         
+  *         @arg @ref LL_RTC_TAMPER_MASK_TAMPER1
+  *         @arg @ref LL_RTC_TAMPER_MASK_TAMPER2
+  *         @arg @ref LL_RTC_TAMPER_MASK_TAMPER3
+  *
   * @retval None
   */
 __STATIC_INLINE void LL_RTC_TAMPER_DisableMask(RTC_TypeDef *RTCx, uint32_t Mask)
@@ -2748,10 +2706,10 @@ __STATIC_INLINE void LL_RTC_TAMPER_DisableMask(RTC_TypeDef *RTCx, uint32_t Mask)
   *         TAMPCR       TAMP3NOERASE  LL_RTC_TAMPER_EnableEraseBKP
   * @param  RTCx RTC Instance
   * @param  Tamper This parameter can be a combination of the following values:
-  *         @arg @ref LL_RTC_TAMPER_NOERASE_TAMPER1 
-  *         @arg @ref LL_RTC_TAMPER_NOERASE_TAMPER2 
-  *         @arg @ref LL_RTC_TAMPER_NOERASE_TAMPER3 
-  *         
+  *         @arg @ref LL_RTC_TAMPER_NOERASE_TAMPER1
+  *         @arg @ref LL_RTC_TAMPER_NOERASE_TAMPER2
+  *         @arg @ref LL_RTC_TAMPER_NOERASE_TAMPER3
+  *
   * @retval None
   */
 __STATIC_INLINE void LL_RTC_TAMPER_EnableEraseBKP(RTC_TypeDef *RTCx, uint32_t Tamper)
@@ -2766,10 +2724,10 @@ __STATIC_INLINE void LL_RTC_TAMPER_EnableEraseBKP(RTC_TypeDef *RTCx, uint32_t Ta
   *         TAMPCR       TAMP3NOERASE  LL_RTC_TAMPER_DisableEraseBKP
   * @param  RTCx RTC Instance
   * @param  Tamper This parameter can be a combination of the following values:
-  *         @arg @ref LL_RTC_TAMPER_NOERASE_TAMPER1 
-  *         @arg @ref LL_RTC_TAMPER_NOERASE_TAMPER2 
-  *         @arg @ref LL_RTC_TAMPER_NOERASE_TAMPER3 
-  *         
+  *         @arg @ref LL_RTC_TAMPER_NOERASE_TAMPER1
+  *         @arg @ref LL_RTC_TAMPER_NOERASE_TAMPER2
+  *         @arg @ref LL_RTC_TAMPER_NOERASE_TAMPER3
+  *
   * @retval None
   */
 __STATIC_INLINE void LL_RTC_TAMPER_DisableEraseBKP(RTC_TypeDef *RTCx, uint32_t Tamper)
@@ -2915,10 +2873,10 @@ __STATIC_INLINE uint32_t LL_RTC_TAMPER_GetSamplingFreq(RTC_TypeDef *RTCx)
   *         TAMPCR       TAMP3TRG      LL_RTC_TAMPER_EnableActiveLevel
   * @param  RTCx RTC Instance
   * @param  Tamper This parameter can be a combination of the following values:
-  *         @arg @ref LL_RTC_TAMPER_ACTIVELEVEL_TAMP1 
-  *         @arg @ref LL_RTC_TAMPER_ACTIVELEVEL_TAMP2 
-  *         @arg @ref LL_RTC_TAMPER_ACTIVELEVEL_TAMP3 
-  *         
+  *         @arg @ref LL_RTC_TAMPER_ACTIVELEVEL_TAMP1
+  *         @arg @ref LL_RTC_TAMPER_ACTIVELEVEL_TAMP2
+  *         @arg @ref LL_RTC_TAMPER_ACTIVELEVEL_TAMP3
+  *
   * @retval None
   */
 __STATIC_INLINE void LL_RTC_TAMPER_EnableActiveLevel(RTC_TypeDef *RTCx, uint32_t Tamper)
@@ -2933,10 +2891,10 @@ __STATIC_INLINE void LL_RTC_TAMPER_EnableActiveLevel(RTC_TypeDef *RTCx, uint32_t
   *         TAMPCR       TAMP3TRG      LL_RTC_TAMPER_DisableActiveLevel
   * @param  RTCx RTC Instance
   * @param  Tamper This parameter can be a combination of the following values:
-  *         @arg @ref LL_RTC_TAMPER_ACTIVELEVEL_TAMP1 
-  *         @arg @ref LL_RTC_TAMPER_ACTIVELEVEL_TAMP2 
-  *         @arg @ref LL_RTC_TAMPER_ACTIVELEVEL_TAMP3 
-  *         
+  *         @arg @ref LL_RTC_TAMPER_ACTIVELEVEL_TAMP1
+  *         @arg @ref LL_RTC_TAMPER_ACTIVELEVEL_TAMP2
+  *         @arg @ref LL_RTC_TAMPER_ACTIVELEVEL_TAMP3
+  *
   * @retval None
   */
 __STATIC_INLINE void LL_RTC_TAMPER_DisableActiveLevel(RTC_TypeDef *RTCx, uint32_t Tamper)

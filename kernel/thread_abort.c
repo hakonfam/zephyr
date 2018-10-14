@@ -13,6 +13,7 @@
 #include <kernel.h>
 #include <kernel_structs.h>
 #include <kernel_internal.h>
+#include <kswap.h>
 #include <string.h>
 #include <toolchain.h>
 #include <linker/sections.h>
@@ -30,29 +31,33 @@ void _impl_k_thread_abort(k_tid_t thread)
 
 	key = irq_lock();
 
-	__ASSERT(!(thread->base.user_options & K_ESSENTIAL),
+	__ASSERT((thread->base.user_options & K_ESSENTIAL) == 0,
 		 "essential thread aborted");
 
 	_k_thread_single_abort(thread);
 	_thread_monitor_exit(thread);
 
-	if (_current == thread) {
-		_Swap(key);
-		CODE_UNREACHABLE;
-	}
+	if (_is_in_isr()) {
+		irq_unlock(key);
+	} else {
+		if (_current == thread) {
+			(void)_Swap(key);
+			CODE_UNREACHABLE;
+		}
 
-	/* The abort handler might have altered the ready queue. */
-	_reschedule_threads(key);
+		/* The abort handler might have altered the ready queue. */
+		_reschedule(key);
+	}
 }
 #endif
 
 #ifdef CONFIG_USERSPACE
-_SYSCALL_HANDLER(k_thread_abort, thread_p)
+Z_SYSCALL_HANDLER(k_thread_abort, thread_p)
 {
 	struct k_thread *thread = (struct k_thread *)thread_p;
-	_SYSCALL_OBJ(thread, K_OBJ_THREAD);
-	_SYSCALL_VERIFY_MSG(!(thread->base.user_options & K_ESSENTIAL),
-		"aborting essential thread %p", thread);
+	Z_OOPS(Z_SYSCALL_OBJ(thread, K_OBJ_THREAD));
+	Z_OOPS(Z_SYSCALL_VERIFY_MSG(!(thread->base.user_options & K_ESSENTIAL),
+				    "aborting essential thread %p", thread));
 
 	_impl_k_thread_abort((struct k_thread *)thread);
 	return 0;

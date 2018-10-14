@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define LOG_MODULE_NAME net_test
+#define NET_LOG_LEVEL CONFIG_DNS_RESOLVER_LOG_LEVEL
+
 #include <zephyr/types.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -22,7 +25,7 @@
 #define NET_LOG_ENABLED 1
 #include "net_private.h"
 
-#if defined(CONFIG_NET_DEBUG_DNS_RESOLVE)
+#if defined(CONFIG_DNS_RESOLVER_LOG_LEVEL_DBG)
 #define DBG(fmt, ...) printk(fmt, ##__VA_ARGS__)
 #else
 #define DBG(fmt, ...)
@@ -127,7 +130,8 @@ static int sender_iface(struct net_if *iface, struct net_pkt *pkt)
 	}
 
 	if (!timeout_query) {
-		struct net_if_test *data = iface->dev->driver_data;
+		struct net_if_test *data =
+			net_if_get_device(iface)->driver_data;
 		struct dns_resolve_context *ctx;
 		int slot;
 
@@ -211,7 +215,7 @@ static void test_init(void)
 
 	iface1 = net_if_get_by_index(0);
 
-	((struct net_if_test *)iface1->dev->driver_data)->idx = 0;
+	((struct net_if_test *)net_if_get_device(iface1)->driver_data)->idx = 0;
 
 #if defined(CONFIG_NET_IPV6)
 	ifaddr = net_if_ipv6_addr_add(iface1, &my_addr1,

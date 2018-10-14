@@ -28,7 +28,7 @@ requirement for a UNIX tool that is not available on Windows, we strongly
 recommend you use the Windows Command Prompt for performance and minimal
 dependency set.
 
-Using Windows Command Prompt (Recommended, fastest)
+Option 1: Windows Command Prompt
 ===================================================
 
 The easiest way to install the dependencies natively on Microsoft Windows is
@@ -42,7 +42,9 @@ packages from their respective websites.
    running that every time you open a Command Prompt.
 
 #. If you're behind a corporate firewall, you'll likely need to specify a
-   proxy to get access to internet resources::
+   proxy to get access to internet resources:
+
+   .. code-block:: console
 
       set HTTP_PROXY=http://user:password@proxy.mycompany.com:1234
       set HTTPS_PROXY=http://user:password@proxy.mycompany.com:1234
@@ -59,18 +61,24 @@ packages from their respective websites.
 
       choco feature enable -n allowGlobalConfirmation
 
-#. Install CMake and DTC:
+#. Install CMake:
 
    .. code-block:: console
 
       choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
-      choco install dtc-msys2 --version 1.4.4
 
 #. Install the rest of the tools:
 
    .. code-block:: console
 
-      choco install git python ninja gperf
+      choco install git python ninja dtc-msys2 gperf doxygen.install
+
+#. **Optionally** install the tools required to build the documentation in .pdf
+   format:
+
+   .. code-block:: console
+
+      choco install strawberryperl miktex rsvg-convert
 
 #. Close the Command Prompt window.
 
@@ -83,10 +91,18 @@ packages from their respective websites.
       cd %userprofile%
       git clone https://github.com/zephyrproject-rtos/zephyr.git
 
-#. Install the required Python modules::
+#. Install the required Python modules:
+
+   .. code-block:: console
 
       cd %userprofile%\zephyr
-      pip install --user -r scripts/requirements.txt
+      pip3 install -r scripts/requirements.txt
+
+   .. note::
+
+      Although pip can install packages in the user's directory by means
+      of the ``--user`` flag, this makes it harder for the Command Prompt
+      to find the executables in Python modules installed by ``pip3``.
 
 #. The build system should now be ready to work with any toolchain installed in
    your system. In the next step you'll find instructions for installing
@@ -109,7 +125,7 @@ packages from their respective websites.
 
 
    * For ARM, install GNU ARM Embedded from the ARM developer website:
-     `GNU ARM Embedded`_ (install to :file:`c:\\gccarmemb`).
+     `GNU ARM Embedded`_ (install to :file:`c:\\gnuarmemb`).
 
 #. Within the Command Prompt, set up environment variables for the installed
    tools and for the Zephyr environment:
@@ -118,7 +134,7 @@ packages from their respective websites.
 
    .. code-block:: console
 
-      set ZEPHYR_GCC_VARIANT=issm
+      set ZEPHYR_TOOLCHAIN_VARIANT=issm
       set ISSM_INSTALLATION_PATH=c:\issm0-toolchain-windows-2017-01-25
 
    Use the path where you extracted the ISSM toolchain.
@@ -127,15 +143,21 @@ packages from their respective websites.
 
    .. code-block:: console
 
-      set ZEPHYR_GCC_VARIANT=gccarmemb
-      set GCCARMEMB_TOOLCHAIN_PATH=c:\gccarmemb
+      set ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb
+      set GNUARMEMB_TOOLCHAIN_PATH=c:\gnuarmemb
 
-   And for either, set the `ZEPHYR_BASE` environment variable to the root
-   of the Zephyr repository you cloned:
+   To use the same toolchain in new sessions in the future you can set the
+   variables in the file :file:`%userprofile%\\zephyrrc.cmd`.
+
+   And for either, run the :file:`zephyr-env.cmd` file in order to set the
+   :makevar:`ZEPHYR_BASE` environment variable:
 
    .. code-block:: console
 
-      set ZEPHYR_BASE=%userprofile%\zephyr
+      zephyr-env.cmd
+
+   .. note:: In previous releases of Zephyr, the ``ZEPHYR_TOOLCHAIN_VARIANT``
+             variable was called ``ZEPHYR_GCC_VARIANT``.
 
 #. Finally, you can try building the :ref:`hello_world` sample to check things
    out.
@@ -161,11 +183,12 @@ packages from their respective websites.
 This should check that all the tools and toolchain are set up correctly for
 your own Zephyr development.
 
-Using MSYS2
-===========
+Option 2: MSYS2
+===============
 
-The Zephyr development environment on Windows relies on MSYS2, a modern UNIX
-environment for Windows. Follow the steps below to set it up:
+Alternatively, one can set up the Zephyr development environment with
+MSYS2, a modern UNIX environment for Windows. Follow the steps below
+to set it up:
 
 #. Download and install :program:`MSYS2`. Download the appropriate (32 or
    64-bit) MSYS2 installer from the `MSYS2 website`_ and execute it. On the
@@ -206,6 +229,16 @@ environment for Windows. Follow the steps below to set it up:
 
       pacman -Syu
       pacman -S git cmake make gcc dtc diffutils ncurses-devel python3 gperf
+
+#. Compile :program:`Ninja` from source (Ninja is not available as
+   an MSYS2 package) and install it:
+
+   .. code-block:: console
+
+      git clone git://github.com/ninja-build/ninja.git && cd ninja
+      git checkout release
+      ./configure.py --bootstrap
+      cp ninja.exe /usr/bin/
 
 #. From within the MSYS2 MSYS Shell, clone a copy of the Zephyr source
    into your home directory using Git.  (Some Zephyr tools require
@@ -254,7 +287,7 @@ environment for Windows. Follow the steps below to set it up:
 
 
    * For ARM, install GNU ARM Embedded from the ARM developer website:
-     `GNU ARM Embedded`_ (install to :file:`c:\\gccarmemb`).
+     `GNU ARM Embedded`_ (install to :file:`c:\\gnuarmemb`).
 
 #. Within the MSYS console, set up environment variables for the installed
    tools and for the Zephyr environment (using the provided shell script):
@@ -263,7 +296,7 @@ environment for Windows. Follow the steps below to set it up:
 
    .. code-block:: console
 
-      export ZEPHYR_GCC_VARIANT=issm
+      export ZEPHYR_TOOLCHAIN_VARIANT=issm
       export ISSM_INSTALLATION_PATH=/c/issm0-toolchain-windows-2017-01-25
 
    Use the path where you extracted the ISSM toolchain.
@@ -272,8 +305,8 @@ environment for Windows. Follow the steps below to set it up:
 
    .. code-block:: console
 
-      export ZEPHYR_GCC_VARIANT=gccarmemb
-      export GCCARMEMB_TOOLCHAIN_PATH=/c/gccarmemb
+      export ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb
+      export GNUARMEMB_TOOLCHAIN_PATH=/c/gnuarmemb
 
    And for either, run the provided script to set up zephyr project specific
    variables:
@@ -284,46 +317,30 @@ environment for Windows. Follow the steps below to set it up:
       cd <zephyr git clone location>
       source zephyr-env.sh
 
-#. Within the MSYS console, build Kconfig in :file:`$ZEPHYR_BASE/build` and
-    add it to path
-
-   .. code-block:: console
-
-      cd $ZEPHYR_BASE
-      mkdir build && cd build
-      cmake $ZEPHYR_BASE/scripts
-      make
-      echo "export PATH=$PWD/kconfig:\$PATH" >> $HOME/.zephyrrc
-      source $ZEPHYR_BASE/zephyr-env.sh
-
-    .. note::
-
-        You only need to do this once after cloning the git repository.
-
 #. Finally, you can try building the :ref:`hello_world` sample to check things
    out.
 
-To build for the Intel |reg| Quark |trade| (x86-based) Arduino 101:
+   To build for the Intel |reg| Quark |trade| (x86-based) Arduino 101:
 
-.. zephyr-app-commands::
-  :zephyr-app: samples/hello_world
-  :board: arduino_101
-  :host-os: win
-  :goals: build
+   .. zephyr-app-commands::
+     :zephyr-app: samples/hello_world
+     :board: arduino_101
+     :host-os: win
+     :goals: build
 
-To build for the ARM-based Nordic nRF52 Development Kit:
+   To build for the ARM-based Nordic nRF52 Development Kit:
 
-.. zephyr-app-commands::
-  :zephyr-app: samples/hello_world
-  :board: nrf52_pca10040
-  :host-os: win
-  :goals: build
+   .. zephyr-app-commands::
+     :zephyr-app: samples/hello_world
+     :board: nrf52_pca10040
+     :host-os: win
+     :goals: build
 
 This should check that all the tools and toolchain are set up correctly for
 your own Zephyr development.
 
-Using Windows 10 WSL (Windows Subsystem for Linux)
-==================================================
+Option 3: Windows 10 WSL (Windows Subsystem for Linux)
+======================================================
 
 If you are running a recent version of Windows 10 you can make use of the
 built-in functionality to natively run Ubuntu binaries directly on a standard

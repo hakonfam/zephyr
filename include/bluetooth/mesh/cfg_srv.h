@@ -7,8 +7,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#ifndef __BT_MESH_CFG_SRV_H
-#define __BT_MESH_CFG_SRV_H
+#ifndef ZEPHYR_INCLUDE_BLUETOOTH_MESH_CFG_SRV_H_
+#define ZEPHYR_INCLUDE_BLUETOOTH_MESH_CFG_SRV_H_
 
 /**
  * @brief Bluetooth Mesh
@@ -30,7 +30,7 @@ struct bt_mesh_cfg_srv {
 	u8_t default_ttl;          /* Default TTL */
 
 	/* Heartbeat Publication */
-	struct {
+	struct bt_mesh_hb_pub {
 		struct k_delayed_work timer;
 
 		u16_t dst;
@@ -42,7 +42,7 @@ struct bt_mesh_cfg_srv {
 	} hb_pub;
 
 	/* Heartbeat Subscription */
-	struct {
+	struct bt_mesh_hb_sub {
 		s64_t  expiry;
 
 		u16_t src;
@@ -66,4 +66,4 @@ extern const struct bt_mesh_model_op bt_mesh_cfg_srv_op[];
  * @}
  */
 
-#endif /* __BT_MESH_CFG_SRV_H */
+#endif /* ZEPHYR_INCLUDE_BLUETOOTH_MESH_CFG_SRV_H_ */

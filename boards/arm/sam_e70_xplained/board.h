@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2018 Justin Watson
  * Copyright (c) 2016 Piotr Mienkowski
  * SPDX-License-Identifier: Apache-2.0
  */

@@ -13,17 +13,8 @@
  * include/arch/cpu.h)
  */
 
-#ifndef _ARC_ARCH__H_
-#define _ARC_ARCH__H_
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/* APIs need to support non-byte addressable architectures */
-
-#define OCTET_TO_SIZEOFUNIT(X) (X)
-#define SIZEOFUNIT_TO_OCTET(X) (X)
+#ifndef ZEPHYR_INCLUDE_ARCH_ARC_ARCH_H_
+#define ZEPHYR_INCLUDE_ARCH_ARC_ARCH_H_
 
 #include <generated_dts_board.h>
 #include <sw_isr_table.h>
@@ -39,44 +30,130 @@ extern "C" {
 #include <arch/arc/v2/addr_types.h>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#if defined(CONFIG_MPU_STACK_GUARD) || defined(CONFIG_USERSPACE)
+	#if defined(CONFIG_ARC_CORE_MPU)
+		#if CONFIG_ARC_MPU_VER == 2
+		/*
+		 * The minimum MPU region of MPU v2 is 2048 bytes. The
+		 * start address of MPU region should be aligned to the
+		 * region size
+		 */
+		/* The STACK_GUARD_SIZE is the size of stack guard region */
+			#define STACK_ALIGN  2048
+		#elif CONFIG_ARC_MPU_VER == 3
+			#define STACK_ALIGN 32
+		#else
+			#error "Unsupported MPU version"
+		#endif /* CONFIG_ARC_MPU_VER */
+
+	#else /* CONFIG_ARC_CORE_MPU */
+		#error "Requires to enable MPU"
+	#endif
+
+#else  /* CONFIG_MPU_STACK_GUARD  || CONFIG_USERSPACE */
+	#define STACK_ALIGN  4
+#endif
+
 #if defined(CONFIG_MPU_STACK_GUARD)
-#if defined(CONFIG_ARC_CORE_MPU)
-#if CONFIG_ARC_MPU_VER == 2
-/*
- * The minimum MPU region of MPU v2 is 2048 bytes. The
- * start address of MPU region should be aligned to the
- * region size
+	#if CONFIG_ARC_MPU_VER == 2
+	#define STACK_GUARD_SIZE 2048
+	#elif CONFIG_ARC_MPU_VER == 3
+	#define STACK_GUARD_SIZE 32
+	#endif
+#else /* CONFIG_MPU_STACK_GUARD */
+	#define STACK_GUARD_SIZE 0
+#endif /* CONFIG_MPU_STACK_GUARD */
+
+#define STACK_SIZE_ALIGN(x)	max(STACK_ALIGN, x)
+
+
+/**
+ * @brief Calculate power of two ceiling for a buffer size input
+ *
  */
-/* The STACK_GUARD_SIZE is the size of stack guard region */
-#define STACK_ALIGN  2048
-#define STACK_GUARD_SIZE 2048
-#elif CONFIG_ARC_MPU_VER == 3
-#define STACK_ALIGN 32
-#define STACK_GUARD_SIZE 32
-#endif
-#else /* CONFIG_ARC_CORE_MPU */
-#error "Unsupported STACK_ALIGN"
-#endif
-#else  /* CONFIG_MPU_STACK_GUARD */
-#define STACK_ALIGN  4
-#define STACK_GUARD_SIZE 0
-#endif
+#define POW2_CEIL(x) ((1 << (31 - __builtin_clz(x))) < x ?  \
+		1 << (31 - __builtin_clz(x) + 1) : \
+		1 << (31 - __builtin_clz(x)))
+
+#if defined(CONFIG_USERSPACE)
+
+#if CONFIG_ARC_MPU_VER == 2
 
 #define _ARCH_THREAD_STACK_DEFINE(sym, size) \
-	struct _k_thread_stack_element __noinit __aligned(STACK_ALIGN) \
-		sym[size+STACK_GUARD_SIZE]
+	struct _k_thread_stack_element __kernel_noinit \
+		__aligned(POW2_CEIL(STACK_SIZE_ALIGN(size))) \
+		sym[POW2_CEIL(STACK_SIZE_ALIGN(size)) + \
+		+  STACK_GUARD_SIZE + CONFIG_PRIVILEGED_STACK_SIZE]
+
+#define _ARCH_THREAD_STACK_LEN(size) \
+	    (POW2_CEIL(STACK_SIZE_ALIGN(size)) + \
+	     max(POW2_CEIL(STACK_SIZE_ALIGN(size)), \
+		 POW2_CEIL(STACK_GUARD_SIZE + CONFIG_PRIVILEGED_STACK_SIZE)))
 
 #define _ARCH_THREAD_STACK_ARRAY_DEFINE(sym, nmemb, size) \
-	struct _k_thread_stack_element __noinit __aligned(STACK_ALIGN) \
-		sym[nmemb][size+STACK_GUARD_SIZE]
+	struct _k_thread_stack_element __kernel_noinit \
+		__aligned(POW2_CEIL(STACK_SIZE_ALIGN(size))) \
+		sym[nmemb][_ARCH_THREAD_STACK_LEN(size)]
+
+#define _ARCH_THREAD_STACK_MEMBER(sym, size) \
+	struct _k_thread_stack_element \
+		__aligned(POW2_CEIL(STACK_SIZE_ALIGN(size))) \
+		sym[POW2_CEIL(size) + \
+		+ STACK_GUARD_SIZE + CONFIG_PRIVILEGED_STACK_SIZE]
+
+#elif CONFIG_ARC_MPU_VER == 3
+
+#define _ARCH_THREAD_STACK_DEFINE(sym, size) \
+	struct _k_thread_stack_element __kernel_noinit __aligned(STACK_ALIGN) \
+		sym[size + \
+		+ STACK_GUARD_SIZE + CONFIG_PRIVILEGED_STACK_SIZE]
+
+#define _ARCH_THREAD_STACK_LEN(size) \
+		((size) + STACK_GUARD_SIZE + CONFIG_PRIVILEGED_STACK_SIZE)
+
+#define _ARCH_THREAD_STACK_ARRAY_DEFINE(sym, nmemb, size) \
+	struct _k_thread_stack_element __kernel_noinit __aligned(STACK_ALIGN) \
+		sym[nmemb][_ARCH_THREAD_STACK_LEN(size)]
 
 #define _ARCH_THREAD_STACK_MEMBER(sym, size) \
 	struct _k_thread_stack_element __aligned(STACK_ALIGN) \
-		sym[size+STACK_GUARD_SIZE]
+		sym[size + \
+		+ STACK_GUARD_SIZE + CONFIG_PRIVILEGED_STACK_SIZE]
+
+#endif /* CONFIG_ARC_MPU_VER */
+
+#define _ARCH_THREAD_STACK_SIZEOF(sym) \
+		(sizeof(sym) - CONFIG_PRIVILEGED_STACK_SIZE - STACK_GUARD_SIZE)
+
+#define _ARCH_THREAD_STACK_BUFFER(sym) \
+		((char *)(sym))
+
+#else /* CONFIG_USERSPACE */
+
+#define _ARCH_THREAD_STACK_DEFINE(sym, size) \
+	struct _k_thread_stack_element __kernel_noinit __aligned(STACK_ALIGN) \
+		sym[size + STACK_GUARD_SIZE]
+
+#define _ARCH_THREAD_STACK_LEN(size) ((size) + STACK_GUARD_SIZE)
+
+#define _ARCH_THREAD_STACK_ARRAY_DEFINE(sym, nmemb, size) \
+	struct _k_thread_stack_element __kernel_noinit __aligned(STACK_ALIGN) \
+		sym[nmemb][_ARCH_THREAD_STACK_LEN(size)]
+
+#define _ARCH_THREAD_STACK_MEMBER(sym, size) \
+	struct _k_thread_stack_element __aligned(STACK_ALIGN) \
+		sym[size + STACK_GUARD_SIZE]
 
 #define _ARCH_THREAD_STACK_SIZEOF(sym) (sizeof(sym) - STACK_GUARD_SIZE)
 
 #define _ARCH_THREAD_STACK_BUFFER(sym) ((char *)(sym + STACK_GUARD_SIZE))
+
+#endif /* CONFIG_USERSPACE */
+
 
 #ifdef CONFIG_USERSPACE
 #ifdef CONFIG_ARC_MPU
@@ -147,60 +224,7 @@ extern "C" {
 typedef u32_t k_mem_partition_attr_t;
 #endif /* _ASMLANGUAGE */
 
-#ifdef CONFIG_USERSPACE
-#ifndef _ASMLANGUAGE
-/* Syscall invocation macros. arc-specific machine constraints used to ensure
- * args land in the proper registers. Currently, they are all stub functions
- * just for enabling CONFIG_USERSPACE on arc w/o errors.
- */
-
-static inline u32_t _arch_syscall_invoke6(u32_t arg1, u32_t arg2, u32_t arg3,
-					  u32_t arg4, u32_t arg5, u32_t arg6,
-					  u32_t call_id)
-{
-	return 0;
-}
-
-static inline u32_t _arch_syscall_invoke5(u32_t arg1, u32_t arg2, u32_t arg3,
-					  u32_t arg4, u32_t arg5, u32_t call_id)
-{
-	return 0;
-}
-
-static inline u32_t _arch_syscall_invoke4(u32_t arg1, u32_t arg2, u32_t arg3,
-					  u32_t arg4, u32_t call_id)
-{
-	return 0;
-}
-
-static inline u32_t _arch_syscall_invoke3(u32_t arg1, u32_t arg2, u32_t arg3,
-					  u32_t call_id)
-{
-	return 0;
-}
-
-static inline u32_t _arch_syscall_invoke2(u32_t arg1, u32_t arg2, u32_t call_id)
-{
-	return 0;
-}
-
-static inline u32_t _arch_syscall_invoke1(u32_t arg1, u32_t call_id)
-{
-	return 0;
-}
-
-static inline u32_t _arch_syscall_invoke0(u32_t call_id)
-{
-	return 0;
-}
-
-static inline int _arch_is_user_context(void)
-{
-	return 0;
-}
-#endif /* _ASMLANGUAGE */
-#endif /* CONFIG_USERSPACE */
 #ifdef __cplusplus
 }
 #endif
-#endif /* _ARC_ARCH__H_ */
+#endif /* ZEPHYR_INCLUDE_ARCH_ARC_ARCH_H_ */

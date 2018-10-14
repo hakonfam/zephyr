@@ -17,8 +17,8 @@
  * necessary to instantiate instances of struct k_thread.
  */
 
-#ifndef _kernel_arch_thread_h_
-#define _kernel_arch_thread_h_
+#ifndef ZEPHYR_ARCH_ARM_INCLUDE_KERNEL_ARCH_THREAD_H_
+#define ZEPHYR_ARCH_ARM_INCLUDE_KERNEL_ARCH_THREAD_H_
 
 #ifndef _ASMLANGUAGE
 #include <zephyr/types.h>
@@ -93,6 +93,12 @@ struct _thread_arch {
 	 * in its exception stack frame.
 	 */
 	struct _preempt_float  preempt_float;
+#endif
+
+#ifdef CONFIG_USERSPACE
+	u32_t mode;
+	u32_t priv_stack_start;
+	u32_t priv_stack_size;
 #endif
 };
 

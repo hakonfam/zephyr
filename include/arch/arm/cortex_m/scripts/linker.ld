@@ -8,7 +8,7 @@
  * @file
  * @brief Linker command/script file
  *
- * Linker script for the Cortex-M3 platform.
+ * Linker script for the Cortex-M platforms.
  */
 
 #define _LINKER
@@ -74,11 +74,16 @@ MEMORY
 #ifdef CONFIG_TI_CCFG_PRESENT
     FLASH_CCFG            (rwx): ORIGIN = CCFG_ADDR, LENGTH = CCFG_SIZE
 #endif
+#ifdef CONFIG_CCM_BASE_ADDRESS
+    CCM                   (rw) : ORIGIN = CONFIG_CCM_BASE_ADDRESS, LENGTH = CONFIG_CCM_SIZE * 1K
+#endif
     SRAM                  (wx) : ORIGIN = RAM_ADDR, LENGTH = RAM_SIZE
 
     /* Used by and documented in include/linker/intlist.ld */
     IDT_LIST  (wx)      : ORIGIN = (RAM_ADDR + RAM_SIZE), LENGTH = 2K
     }
+
+ENTRY(CONFIG_KERNEL_ENTRY)
 
 SECTIONS
     {
@@ -126,6 +131,7 @@ SECTIONS
 	*(".text.*")
 	*(.gnu.linkonce.t.*)
 
+#include <linker/priv_stacks-text.ld>
 #include <linker/kobject-text.ld>
 
 	} GROUP_LINK_IN(ROMABLE_REGION)
@@ -162,6 +168,7 @@ SECTIONS
 #include <custom-rodata.ld>
 #endif
 
+#include <linker/priv_stacks-rom.ld>
 #include <linker/kobject-rom.ld>
 
 	/*
@@ -176,6 +183,22 @@ SECTIONS
 	 */
 	. = ALIGN(4);
 	} GROUP_LINK_IN(ROMABLE_REGION)
+
+#if defined CONFIG_ARM_FIRMWARE_HAS_SECURE_ENTRY_FUNCS
+#if CONFIG_ARM_NSC_REGION_BASE_ADDRESS != 0
+       SECTION_PROLOGUE(.gnu.sgstubs,CONFIG_ARM_NSC_REGION_BASE_ADDRESS,)
+#else
+       SECTION_PROLOGUE(.gnu.sgstubs,,)
+#endif /* CONFIG_ARM_NSC_REGION_BASE_ADDRESS != 0 */
+       {
+       . = ALIGN(4);
+       __sg_start = .;
+       *(.gnu*)
+       . = ALIGN(4);
+       __sg_end = .;
+       __sg_size = __sg_end - __sg_start;
+       } GROUP_LINK_IN(ROMABLE_REGION)
+#endif /* CONFIG_ARM_FIRMWARE_HAS_SECURE_ENTRY_FUNCS */
 
 	_image_rodata_end = .;
 	_image_rom_end = .;
@@ -212,12 +235,34 @@ SECTIONS
 	}
 #endif
 
+#include <app_data_alignment.ld>
+
+#if defined(CONFIG_APP_SHARED_MEM)
+#if defined(CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT)
+#define APP_SHARED_ALIGN . = ALIGN(4);
+		#include <app_smem.ld>
+#else
+	SECTION_PROLOGUE(_APP_SMEM_SECTION_NAME, (OPTIONAL),)
+	{
+		. = ALIGN(4);
+		_image_ram_start = .;
+		_app_smem_start = .;
+		APP_SMEM_SECTION()
+		_app_smem_end = .;
+		. = ALIGN(4);
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+#endif  /* CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT */
+
+	_app_smem_size = _app_smem_end - _app_smem_start;
+	_app_smem_rom_start = LOADADDR(_APP_SMEM_SECTION_NAME);
+#endif  /* CONFIG_APP_SHARED_MEM */
+
 #ifdef CONFIG_APPLICATION_MEMORY
 	SECTION_DATA_PROLOGUE(_APP_DATA_SECTION_NAME, (OPTIONAL),)
 	{
+
 		__app_ram_start = .;
 		__app_data_ram_start = .;
-		_image_ram_start = .;
 		APP_INPUT_SECTION(.data)
 		APP_INPUT_SECTION(".data.*")
 		__app_data_ram_end = .;
@@ -242,7 +287,15 @@ SECTIONS
 		APP_INPUT_SECTION(".noinit.*")
 	} GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
 
+	__app_last_address_used = .;
+
+	/* Pad out application ram area to make MPU friendly */
+	SECTION_PROLOGUE(app_pad, (NOLOAD OPTIONAL),)
+	{
+		. = ALIGN(_app_data_align);
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
 	__app_ram_end = .;
+	__app_ram_size = __app_ram_end - __app_ram_start;
 #endif /* CONFIG_APPLICATION_MEMORY */
 
     SECTION_DATA_PROLOGUE(_BSS_SECTION_NAME,(NOLOAD),)
@@ -253,9 +306,6 @@ SECTIONS
          */
         . = ALIGN(4);
 	__bss_start = .;
-#ifndef CONFIG_APPLICATION_MEMORY
-	_image_ram_start = .;
-#endif
 	__kernel_ram_start = .;
 
 	KERNEL_INPUT_SECTION(.bss)
@@ -299,6 +349,7 @@ SECTIONS
     __data_rom_start = LOADADDR(_DATA_SECTION_NAME);
 
 #include <linker/common-ram.ld>
+#include <linker/priv_stacks.ld>
 #include <linker/kobject.ld>
 
     __data_ram_end = .;
@@ -313,6 +364,45 @@ SECTIONS
     __kernel_ram_size = __kernel_ram_end - __kernel_ram_start;
 
     GROUP_END(RAMABLE_REGION)
+
+#ifdef CONFIG_CCM_BASE_ADDRESS
+
+    GROUP_START(CCM)
+
+	SECTION_PROLOGUE(_CCM_BSS_SECTION_NAME, (NOLOAD OPTIONAL),SUBALIGN(4))
+	{
+		__ccm_start = .;
+		__ccm_bss_start = .;
+		*(.ccm_bss)
+		*(".ccm_bss.*")
+	} GROUP_LINK_IN(CCM)
+
+	__ccm_bss_end = .;
+
+	SECTION_PROLOGUE(_CCM_NOINIT_SECTION_NAME, (NOLOAD OPTIONAL),SUBALIGN(4))
+	{
+		__ccm_noinit_start = .;
+		*(.ccm_noinit)
+		*(".ccm_noinit.*")
+	} GROUP_LINK_IN(CCM)
+
+	__ccm_noinit_end = .;
+
+	SECTION_PROLOGUE(_CCM_DATA_SECTION_NAME, (OPTIONAL),SUBALIGN(4))
+	{
+		__ccm_data_start = .;
+		*(.ccm_data)
+		*(".ccm_data.*")
+	} GROUP_LINK_IN(CCM AT> ROMABLE_REGION)
+
+	__ccm_data_end = .;
+	__ccm_end = .;
+
+	__ccm_data_rom_start = LOADADDR(_CCM_DATA_SECTION_NAME);
+
+    GROUP_END(CCM)
+
+#endif /* CONFIG_CCM_BASE_ADDRESS */
 
 #ifdef CONFIG_CUSTOM_SECTIONS_LD
 /* Located in project source directory */

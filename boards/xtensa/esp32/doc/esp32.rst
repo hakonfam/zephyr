@@ -64,13 +64,13 @@ Set up build environment
 
 With both the toolchain and SDK installed, the Zephyr build system must be
 instructed to use this particular variant by setting the
-``ZEPHYR_GCC_VARIANT`` shell variable.  Two other environment variables
+``ZEPHYR_TOOLCHAIN_VARIANT`` shell variable.  Two other environment variables
 should also be set, pointing to, respectively, the path where ESP-IDF can be
 located, and where the toolchain has been installed:
 
 .. code-block:: console
 
-   export ZEPHYR_GCC_VARIANT="espressif"
+   export ZEPHYR_TOOLCHAIN_VARIANT="espressif"
    export ESP_IDF_PATH="/path/to/esp-idf"
    export ESPRESSIF_TOOLCHAIN_PATH="/path/to/xtensa-esp32-elf/"
 
@@ -84,7 +84,7 @@ of ESP-IDF:
 .. code-block:: console
 
    cd ${ESP_IDF_PATH}
-   git checkout dc8c33892e0
+   git checkout b2ff235bd00
 
 Flashing
 ========
@@ -101,26 +101,6 @@ application.
 Refer to :ref:`build_an_application` and :ref:`application_run` for
 more details.
 
-Environment variables can be set to set the serial port device, baud
-rate, and other options.  Please refer to the following table for
-details.
-
-+----------------+---------------+
-| Variable       | Default value |
-+================+===============+
-| ESP_DEVICE     | /dev/ttyUSB0  |
-+----------------+---------------+
-| ESP_BAUD_RATE  | 921600        |
-+----------------+---------------+
-| ESP_FLASH_SIZE | detect        |
-+----------------+---------------+
-| ESP_FLASH_FREQ | 40m           |
-+----------------+---------------+
-| ESP_FLASH_MODE | dio           |
-+----------------+---------------+
-| ESP_TOOL       | espidf        |
-+----------------+---------------+
-
 It's impossible to determine which serial port the ESP32 board is
 connected to, as it uses a generic RS232-USB converter.  The default of
 ``/dev/ttyUSB0`` is provided as that's often the assigned name on a Linux
@@ -132,10 +112,37 @@ etc).  It might be necessary to change the flash frequency or the flash
 mode; please refer to the `esptool documentation`_ for guidance on these
 settings.
 
-If ``ESP_TOOL`` is set to "espidf", the `esptool.py`_ script found within
-ESP-IDF will be used.  Otherwise, this variable is handled as a path to
-the tool.
+All flashing options are now handled by the :ref:`west` tool, including flashing
+with custom options such as a different serial port.  The ``west`` tool supports
+specific options for the ESP32 board, as listed here:
 
+  --esp-idf-path ESP_IDF_PATH
+                        path to ESP-IDF
+  --esp-device ESP_DEVICE
+                        serial port to flash, default /dev/ttyUSB0
+  --esp-baud-rate ESP_BAUD_RATE
+                        serial baud rate, default 921600
+  --esp-flash-size ESP_FLASH_SIZE
+                        flash size, default "detect"
+  --esp-flash-freq ESP_FLASH_FREQ
+                        flash frequency, default "40m"
+  --esp-flash-mode ESP_FLASH_MODE
+                        flash mode, default "dio"
+  --esp-tool ESP_TOOL   if given, complete path to espidf. default is to
+                        search for it in [ESP_IDF_PATH]/components/esptool_py/
+                        esptool/esptool.py
+  --esp-flash-bootloader ESP_FLASH_BOOTLOADER
+                        Bootloader image to flash
+  --esp-flash-partition_table ESP_FLASH_PARTITION_TABLE
+                        Partition table to flash
+
+For example, to flash to ``/dev/ttyUSB2``, use the following command after
+having build the application in the ``build`` directory:
+
+
+.. code-block:: console
+
+   west flash -d build/ --skip-rebuild --esp-device /dev/ttyUSB2
 
 Using JTAG
 ==========

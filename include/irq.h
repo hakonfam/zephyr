@@ -8,8 +8,8 @@
  * @file
  * @brief Public interface for configuring interrupts
  */
-#ifndef _IRQ_H_
-#define _IRQ_H_
+#ifndef ZEPHYR_INCLUDE_IRQ_H_
+#define ZEPHYR_INCLUDE_IRQ_H_
 
 /* Pull in the arch-specific implementations */
 #include <arch/cpu.h>
@@ -190,7 +190,12 @@ extern "C" {
  *
  * @return Lock-out key.
  */
+#ifdef CONFIG_SMP
+unsigned int _smp_global_lock(void);
+#define irq_lock() _smp_global_lock()
+#else
 #define irq_lock() _arch_irq_lock()
+#endif
 
 /**
  * @brief Unlock interrupts.
@@ -206,7 +211,12 @@ extern "C" {
  *
  * @return N/A
  */
+#ifdef CONFIG_SMP
+void _smp_global_unlock(unsigned int key);
+#define irq_unlock(key) _smp_global_unlock(key)
+#else
 #define irq_unlock(key) _arch_irq_unlock(key)
+#endif
 
 /**
  * @brief Enable an IRQ.
@@ -250,4 +260,4 @@ extern "C" {
 #endif
 
 #endif /* ASMLANGUAGE */
-#endif /* _IRQ_H_ */
+#endif /* ZEPHYR_INCLUDE_IRQ_H_ */

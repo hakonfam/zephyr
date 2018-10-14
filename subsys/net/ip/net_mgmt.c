@@ -4,10 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#if defined(CONFIG_NET_DEBUG_MGMT_EVENT)
-#define SYS_LOG_DOMAIN "net/mgmt"
-#define NET_LOG_ENABLED 1
-#endif
+#define LOG_MODULE_NAME net_mgmt
+#define NET_LOG_LEVEL CONFIG_NET_MGMT_EVENT_LOG_LEVEL
 
 #include <kernel.h>
 #include <toolchain.h>
@@ -17,12 +15,14 @@
 #include <misc/slist.h>
 #include <net/net_mgmt.h>
 
+#include "net_private.h"
+
 struct mgmt_event_entry {
 	u32_t event;
 	struct net_if *iface;
 
 #ifdef CONFIG_NET_MGMT_EVENT_INFO
-	u8_t info[CONFIG_NET_MGMT_EVENT_INFO_SIZE];
+	u8_t info[NET_EVENT_INFO_MAX_SIZE];
 	size_t info_length;
 #endif /* CONFIG_NET_MGMT_EVENT_INFO */
 };
@@ -33,6 +33,7 @@ struct mgmt_event_wait {
 };
 
 static K_SEM_DEFINE(network_event, 0, UINT_MAX);
+static K_SEM_DEFINE(net_mgmt_lock, 1, 1);
 
 NET_STACK_DEFINE(MGMT, mgmt_stack, CONFIG_NET_MGMT_EVENT_STACK_SIZE,
 		 CONFIG_NET_MGMT_EVENT_STACK_SIZE);
@@ -40,44 +41,47 @@ static struct k_thread mgmt_thread_data;
 static struct mgmt_event_entry events[CONFIG_NET_MGMT_EVENT_QUEUE_SIZE];
 static u32_t global_event_mask;
 static sys_slist_t event_callbacks;
-static u16_t in_event;
-static u16_t out_event;
+static s16_t in_event;
+static s16_t out_event;
 
 static inline void mgmt_push_event(u32_t mgmt_event, struct net_if *iface,
 				   void *info, size_t length)
 {
-	events[in_event].event = mgmt_event;
-	events[in_event].iface = iface;
+	s16_t i_idx;
 
-#ifdef CONFIG_NET_MGMT_EVENT_INFO
-	/* Let's put the info length to 0 by default as it will be the most
-	 * common case. Also, it makes code a bit cleaner below as there is
-	 * to need of this line as an else or on error
-	 */
-	events[in_event].info_length = 0;
-
-	if (info && length) {
-		if (length <= CONFIG_NET_MGMT_EVENT_INFO_SIZE) {
-			memcpy(events[in_event].info, info, length);
-			events[in_event].info_length = length;
-		} else {
-			NET_ERR("Event info length %u > max size %u",
-				length, CONFIG_NET_MGMT_EVENT_INFO_SIZE);
-		}
-	}
-
-#else
+#ifndef CONFIG_NET_MGMT_EVENT_INFO
 	ARG_UNUSED(info);
 	ARG_UNUSED(length);
 #endif /* CONFIG_NET_MGMT_EVENT_INFO */
 
-	in_event++;
+	k_sem_take(&net_mgmt_lock, K_FOREVER);
 
-	if (in_event == CONFIG_NET_MGMT_EVENT_QUEUE_SIZE) {
-		in_event = 0;
+	i_idx = in_event + 1;
+	if (i_idx == CONFIG_NET_MGMT_EVENT_QUEUE_SIZE) {
+		i_idx = 0;
 	}
 
-	if (in_event == out_event) {
+#ifdef CONFIG_NET_MGMT_EVENT_INFO
+	if (info && length) {
+		if (length <= NET_EVENT_INFO_MAX_SIZE) {
+			memcpy(events[i_idx].info, info, length);
+			events[i_idx].info_length = length;
+		} else {
+			NET_ERR("Event info length %zu > max size %zu",
+				length, NET_EVENT_INFO_MAX_SIZE);
+			k_sem_give(&net_mgmt_lock);
+
+			return;
+		}
+	} else {
+		events[i_idx].info_length = 0;
+	}
+#endif /* CONFIG_NET_MGMT_EVENT_INFO */
+
+	events[i_idx].event = mgmt_event;
+	events[i_idx].iface = iface;
+
+	if (i_idx == out_event) {
 		u16_t o_idx = out_event + 1;
 
 		if (o_idx == CONFIG_NET_MGMT_EVENT_QUEUE_SIZE) {
@@ -87,21 +91,30 @@ static inline void mgmt_push_event(u32_t mgmt_event, struct net_if *iface,
 		if (events[o_idx].event) {
 			out_event = o_idx;
 		}
+	} else if (out_event < 0) {
+		out_event = i_idx;
 	}
+
+	in_event = i_idx;
+
+	k_sem_give(&net_mgmt_lock);
 }
 
 static inline struct mgmt_event_entry *mgmt_pop_event(void)
 {
-	u16_t o_idx;
+	s16_t o_idx;
 
-	if (!events[out_event].event) {
+	if (out_event < 0 || !events[out_event].event) {
 		return NULL;
 	}
 
 	o_idx = out_event;
 	out_event++;
 
-	if (out_event == CONFIG_NET_MGMT_EVENT_QUEUE_SIZE) {
+	if (o_idx == in_event) {
+		in_event = -1;
+		out_event = -1;
+	} else if (out_event == CONFIG_NET_MGMT_EVENT_QUEUE_SIZE) {
 		out_event = 0;
 	}
 
@@ -132,7 +145,15 @@ static inline void mgmt_rebuild_global_event_mask(void)
 
 static inline bool mgmt_is_event_handled(u32_t mgmt_event)
 {
-	return ((mgmt_event & global_event_mask) == mgmt_event);
+	return (((NET_MGMT_GET_LAYER(mgmt_event) &
+		  NET_MGMT_GET_LAYER(global_event_mask)) ==
+		 NET_MGMT_GET_LAYER(mgmt_event)) &&
+		((NET_MGMT_GET_LAYER_CODE(mgmt_event) &
+		  NET_MGMT_GET_LAYER_CODE(global_event_mask)) ==
+		 NET_MGMT_GET_LAYER_CODE(mgmt_event)) &&
+		((NET_MGMT_GET_COMMAND(mgmt_event) &
+		  NET_MGMT_GET_COMMAND(global_event_mask)) ==
+		 NET_MGMT_GET_COMMAND(mgmt_event)));
 }
 
 static inline void mgmt_run_callbacks(struct mgmt_event_entry *mgmt_event)
@@ -146,9 +167,9 @@ static inline void mgmt_run_callbacks(struct mgmt_event_entry *mgmt_event)
 		NET_MGMT_GET_COMMAND(mgmt_event->event));
 
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&event_callbacks, cb, tmp, node) {
-		if (!(NET_MGMT_GET_LAYER(mgmt_event->event) &
+		if (!(NET_MGMT_GET_LAYER(mgmt_event->event) ==
 		      NET_MGMT_GET_LAYER(cb->event_mask)) ||
-		    !(NET_MGMT_GET_LAYER_CODE(mgmt_event->event) &
+		    !(NET_MGMT_GET_LAYER_CODE(mgmt_event->event) ==
 		      NET_MGMT_GET_LAYER_CODE(cb->event_mask)) ||
 		    (NET_MGMT_GET_COMMAND(mgmt_event->event) &&
 		     NET_MGMT_GET_COMMAND(cb->event_mask) &&
@@ -156,7 +177,6 @@ static inline void mgmt_run_callbacks(struct mgmt_event_entry *mgmt_event)
 		       NET_MGMT_GET_COMMAND(cb->event_mask)))) {
 			continue;
 		}
-
 
 #ifdef CONFIG_NET_MGMT_EVENT_INFO
 		if (mgmt_event->info_length) {
@@ -206,6 +226,7 @@ static void mgmt_thread(void)
 
 	while (1) {
 		k_sem_take(&network_event, K_FOREVER);
+		k_sem_take(&net_mgmt_lock, K_FOREVER);
 
 		NET_DBG("Handling events, forwarding it relevantly");
 
@@ -219,6 +240,7 @@ static void mgmt_thread(void)
 				k_sem_count_get(&network_event));
 
 			k_sem_init(&network_event, 0, UINT_MAX);
+			k_sem_give(&net_mgmt_lock);
 
 			continue;
 		}
@@ -226,6 +248,8 @@ static void mgmt_thread(void)
 		mgmt_run_callbacks(mgmt_event);
 
 		mgmt_clean_event(mgmt_event);
+
+		k_sem_give(&net_mgmt_lock);
 
 		k_yield();
 	}
@@ -283,18 +307,26 @@ void net_mgmt_add_event_callback(struct net_mgmt_event_callback *cb)
 {
 	NET_DBG("Adding event callback %p", cb);
 
+	k_sem_take(&net_mgmt_lock, K_FOREVER);
+
 	sys_slist_prepend(&event_callbacks, &cb->node);
 
 	mgmt_add_event_mask(cb->event_mask);
+
+	k_sem_give(&net_mgmt_lock);
 }
 
 void net_mgmt_del_event_callback(struct net_mgmt_event_callback *cb)
 {
 	NET_DBG("Deleting event callback %p", cb);
 
+	k_sem_take(&net_mgmt_lock, K_FOREVER);
+
 	sys_slist_find_and_remove(&event_callbacks, &cb->node);
 
 	mgmt_rebuild_global_event_mask();
+
+	k_sem_give(&net_mgmt_lock);
 }
 
 void net_mgmt_event_notify_with_info(u32_t mgmt_event, struct net_if *iface,
@@ -339,12 +371,11 @@ void net_mgmt_event_init(void)
 	sys_slist_init(&event_callbacks);
 	global_event_mask = 0;
 
-	in_event = 0;
-	out_event = 0;
+	in_event = -1;
+	out_event = -1;
 
-	memset(events, 0,
-	       CONFIG_NET_MGMT_EVENT_QUEUE_SIZE *
-	       sizeof(struct mgmt_event_entry));
+	(void)memset(events, 0, CONFIG_NET_MGMT_EVENT_QUEUE_SIZE *
+			sizeof(struct mgmt_event_entry));
 
 	k_thread_create(&mgmt_thread_data, mgmt_stack,
 			K_THREAD_STACK_SIZEOF(mgmt_stack),

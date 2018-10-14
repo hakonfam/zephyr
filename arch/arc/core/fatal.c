@@ -17,10 +17,7 @@
 #include <toolchain.h>
 #include <arch/cpu.h>
 #include <misc/printk.h>
-
-const NANO_ESF _default_esf = {
-	0xdeaddead, /* placeholder */
-};
+#include <logging/log_ctrl.h>
 
 /**
  *
@@ -37,14 +34,16 @@ const NANO_ESF _default_esf = {
  *
  * @return This function does not return.
  */
-FUNC_NORETURN void _NanoFatalErrorHandler(unsigned int reason,
-							const NANO_ESF *pEsf)
+void _NanoFatalErrorHandler(unsigned int reason, const NANO_ESF *pEsf)
 {
+	LOG_PANIC();
+
 	switch (reason) {
 	case _NANO_ERR_HW_EXCEPTION:
 		break;
 
-#if defined(CONFIG_STACK_CANARIES) || defined(CONFIG_ARC_STACK_CHECKING)
+#if defined(CONFIG_STACK_CANARIES) || defined(CONFIG_ARC_STACK_CHECKING) \
+	|| defined(CONFIG_STACK_SENTINEL)
 	case _NANO_ERR_STACK_CHK_FAIL:
 		printk("***** Stack Check Fail! *****\n");
 		break;
@@ -66,10 +65,13 @@ FUNC_NORETURN void _NanoFatalErrorHandler(unsigned int reason,
 		printk("**** Unknown Fatal Error %d! ****\n", reason);
 		break;
 	}
-	printk("Current thread ID = %p\n"
-	       "Faulting instruction address = 0x%lx\n",
-	       k_current_get(),
-	       _arc_v2_aux_reg_read(_ARC_V2_ERET));
+
+	printk("Current thread ID = %p\n",  k_current_get());
+
+	if (reason == _NANO_ERR_HW_EXCEPTION) {
+		printk("Faulting instruction address = 0x%lx\n",
+		_arc_v2_aux_reg_read(_ARC_V2_ERET));
+	}
 
 	/*
 	 * Now that the error has been reported, call the user implemented
@@ -80,7 +82,11 @@ FUNC_NORETURN void _NanoFatalErrorHandler(unsigned int reason,
 	 */
 
 	_SysFatalErrorHandler(reason, pEsf);
+}
 
-	for (;;)
-		;
+FUNC_NORETURN void _arch_syscall_oops(void *ssf_ptr)
+{
+	LOG_PANIC();
+	_SysFatalErrorHandler(_NANO_ERR_KERNEL_OOPS, ssf_ptr);
+	CODE_UNREACHABLE;
 }

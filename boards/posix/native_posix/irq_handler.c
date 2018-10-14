@@ -11,12 +11,14 @@
 #include "irq_handler.h"
 #include "irq_offload.h"
 #include "kernel_structs.h"
+#include "kernel_internal.h"
+#include "kswap.h"
 #include "irq_ctrl.h"
 #include "posix_core.h"
 #include "board_soc.h"
 #include "sw_isr_table.h"
 #include "soc.h"
-
+#include <tracing.h>
 
 typedef void (*normal_irq_f_ptr)(void *);
 typedef int (*direct_irq_f_ptr)(void);
@@ -26,27 +28,36 @@ static isr_table_entry_t irq_vector_table[N_IRQS] = { { 0 } };
 
 static int currently_running_irq = -1;
 
-
 static inline void vector_to_irq(int irq_nbr, int *may_swap)
 {
-	if (irq_vector_table[irq_nbr].func == NULL) {
+	/*
+	 * As in this architecture an irq (code) executes in 0 time,
+	 * it is a bit senseless to call _int_latency_start/stop()
+	 */
+	/* _int_latency_start(); */
+
+	sys_trace_isr_enter();
+
+	if (irq_vector_table[irq_nbr].func == NULL) { /* LCOV_EXCL_BR_LINE */
+		/* LCOV_EXCL_START */
 		posix_print_error_and_exit("Received irq %i without a "
 					"registered handler\n",
 					irq_nbr);
+		/* LCOV_EXCL_STOP */
 	} else {
 		if (irq_vector_table[irq_nbr].flags & ISR_FLAG_DIRECT) {
 			*may_swap |= ((direct_irq_f_ptr)
 					irq_vector_table[irq_nbr].func)();
 		} else {
+#ifdef CONFIG_SYS_POWER_MANAGEMENT
+			posix_irq_check_idle_exit();
+#endif
 			((normal_irq_f_ptr)irq_vector_table[irq_nbr].func)
 					(irq_vector_table[irq_nbr].param);
 			*may_swap = 1;
-			/*
-			 * TODO: look into how this kind of ISRs are meant
-			 * to be wrapped
-			 */
 		}
 	}
+	/* _int_latency_stop(); */
 }
 
 /**
@@ -61,13 +72,17 @@ void posix_irq_handler(void)
 {
 	uint64_t irq_lock;
 	int irq_nbr;
-	int may_swap = 0;
+	static int may_swap;
 
 	irq_lock = hw_irq_ctrl_get_current_lock();
 
 	if (irq_lock) {
 		/* "spurious" wakes can happen with interrupts locked */
 		return;
+	}
+
+	if (_kernel.nested == 0) {
+		may_swap = 0;
 	}
 
 	_kernel.nested++;
@@ -91,18 +106,15 @@ void posix_irq_handler(void)
 	/* Call swap if all the following is true:
 	 * 1) may_swap was enabled
 	 * 2) We are not nesting irq_handler calls (interrupts)
-	 * 3) Current thread is preemptible
-	 * 4) Next thread to run in the ready queue is not this thread
+	 * 3) Next thread to run in the ready queue is not this thread
 	 */
-	if (may_swap &&
-		(hw_irq_ctrl_get_cur_prio() == 256) &&
-		(_current->base.preempt < _NON_PREEMPT_THRESHOLD) &&
-		(_kernel.ready_q.cache != _current)) {
+	if (may_swap
+		&& (hw_irq_ctrl_get_cur_prio() == 256)
+		&& (_kernel.ready_q.cache != _current)) {
 
-		__swap(irq_lock);
+		(void)_Swap(irq_lock);
 	}
 }
-
 
 /**
  * Thru this function the IRQ controller can raise an immediate  interrupt which
@@ -117,15 +129,16 @@ void posix_irq_handler_im_from_sw(void)
 	 * handler
 	 */
 	if (hw_irq_ctrl_get_highest_prio_irq() != -1) {
-		if (!posix_is_cpu_running()) {
-			posix_print_error_and_exit("programming error: "
-					"nrf_irq_cont_handler_irq_im_from_sw() "
-					"called from a HW model thread\n");
+		if (!posix_is_cpu_running()) { /* LCOV_EXCL_BR_LINE */
+			/* LCOV_EXCL_START */
+			posix_print_error_and_exit("programming error: %s "
+					"called from a HW model thread\n",
+					__func__);
+			/* LCOV_EXCL_STOP */
 		}
 		posix_irq_handler();
 	}
 }
-
 
 /**
  * @brief Disable all interrupts on the CPU
@@ -212,17 +225,10 @@ int _arch_irq_is_enabled(unsigned int irq)
 	return hw_irq_ctrl_is_irq_enabled(irq);
 }
 
-void _arch_isr_direct_header(void)
-{
-	/* Nothing to be done */
-}
-
 int posix_get_current_irq(void)
 {
 	return currently_running_irq;
 }
-
-
 
 /**
  * Configure a static interrupt.
@@ -248,7 +254,6 @@ void _isr_declare(unsigned int irq_p, int flags, void isr_p(void *),
 	irq_vector_table[irq_p].flags = flags;
 }
 
-
 /*
  * @internal
  *
@@ -263,8 +268,6 @@ void _irq_priority_set(unsigned int irq, unsigned int prio, uint32_t flags)
 	hw_irq_ctrl_prio_set(irq, prio);
 }
 
-
-
 /**
  * Similar to ARM's NVIC_SetPendingIRQ
  * set a pending IRQ from SW
@@ -278,7 +281,6 @@ void posix_sw_set_pending_IRQ(unsigned int IRQn)
 	hw_irq_ctrl_raise_im_from_sw(IRQn);
 }
 
-
 /**
  * Similar to ARM's NVIC_ClearPendingIRQ
  * clear a pending irq from SW
@@ -289,13 +291,31 @@ void posix_sw_clear_pending_IRQ(unsigned int IRQn)
 }
 
 /**
+ * Storage for functions offloaded to IRQ
+ */
+static irq_offload_routine_t off_routine;
+static void *off_parameter;
+
+/**
+ * IRQ handler for the SW interrupt assigned to irq_offload()
+ */
+static void offload_sw_irq_handler(void *a)
+{
+	ARG_UNUSED(a);
+	off_routine(off_parameter);
+}
+
+/**
  * @brief Run a function in interrupt context
  *
- * In this simple board, the function can just be run directly
+ * Raise the SW IRQ assigned to handled this
  */
 void irq_offload(irq_offload_routine_t routine, void *parameter)
 {
-	_kernel.nested++;
-	routine(parameter);
-	_kernel.nested--;
+	off_routine = routine;
+	off_parameter = parameter;
+	_isr_declare(OFFLOAD_SW_IRQ, 0, offload_sw_irq_handler, NULL);
+	_arch_irq_enable(OFFLOAD_SW_IRQ);
+	posix_sw_set_pending_IRQ(OFFLOAD_SW_IRQ);
+	_arch_irq_disable(OFFLOAD_SW_IRQ);
 }

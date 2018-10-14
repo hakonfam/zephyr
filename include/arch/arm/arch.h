@@ -10,26 +10,17 @@
  *
  * This header contains the ARM specific kernel interface.  It is
  * included by the kernel interface architecture-abstraction header
- * (include/arc/cpu.h)
+ * (include/arm/cpu.h)
  */
 
-#ifndef _ARM_ARCH__H_
-#define _ARM_ARCH__H_
+#ifndef ZEPHYR_INCLUDE_ARCH_ARM_ARCH_H_
+#define ZEPHYR_INCLUDE_ARCH_ARM_ARCH_H_
 
 /* Add include for DTS generated information */
 #include <generated_dts_board.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* ARM GPRs are often designated by two different names */
 #define sys_define_gpr_with_alias(name1, name2) union { u32_t name1, name2; }
-
-/* APIs need to support non-byte addressable architectures */
-
-#define OCTET_TO_SIZEOFUNIT(X) (X)
-#define SIZEOFUNIT_TO_OCTET(X) (X)
 
 #ifdef CONFIG_CPU_CORTEX_M
 #include <arch/arm/cortex_m/exc.h>
@@ -43,6 +34,9 @@ extern "C" {
 #include <arch/arm/cortex_m/nmi.h>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @brief Declare the STACK_ALIGN_SIZE
@@ -60,11 +54,11 @@ extern "C" {
 /**
  * @brief Declare a minimum MPU guard alignment and size
  *
- * This specifies the minimum MPU guard alignment/size for the MPU.  This
+ * This specifies the minimum MPU guard alignment/size for the MPU. This
  * will be used to denote the guard section of the stack, if it exists.
  *
  * One key note is that this guard results in extra bytes being added to
- * the stack.  APIs which give the stack ptr and stack size will take this
+ * the stack. APIs which give the stack ptr and stack size will take this
  * guard size into account.
  *
  * Stack is allocated, but initial stack pointer is at the end
@@ -112,10 +106,22 @@ extern "C" {
  * 2) Used to determine the alignment of a stack buffer
  *
  */
-#define STACK_ALIGN	max(STACK_ALIGN_SIZE, MPU_GUARD_ALIGN_AND_SIZE)
+#if defined(CONFIG_USERSPACE)
+#define STACK_ALIGN    32
+#else
+#define STACK_ALIGN    max(STACK_ALIGN_SIZE, MPU_GUARD_ALIGN_AND_SIZE)
+#endif
 
 /**
- * @brief Declare a toplevel thread stack memory region
+ * @brief Calculate power of two ceiling for a buffer size input
+ *
+ */
+#define POW2_CEIL(x) ((1 << (31 - __builtin_clz(x))) < x ?  \
+		1 << (31 - __builtin_clz(x) + 1) : \
+		1 << (31 - __builtin_clz(x)))
+
+/**
+ * @brief Declare a top level thread stack memory region
  *
  * This declares a region of memory suitable for use as a thread's stack.
  *
@@ -134,12 +140,36 @@ extern "C" {
  * @param sym Thread stack symbol name
  * @param size Size of the stack memory region
  */
+#if defined(CONFIG_USERSPACE) && \
+	defined(CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT)
+#define _ARCH_THREAD_STACK_DEFINE(sym, size) \
+	struct _k_thread_stack_element __kernel_noinit \
+		__aligned(POW2_CEIL(size)) sym[POW2_CEIL(size)]
+#else
 #define _ARCH_THREAD_STACK_DEFINE(sym, size) \
 	struct _k_thread_stack_element __kernel_noinit __aligned(STACK_ALIGN) \
 		sym[size+MPU_GUARD_ALIGN_AND_SIZE]
+#endif
 
 /**
- * @brief Declare a toplevel array of thread stack memory regions
+ * @brief Calculate size of stacks to be allocated in a stack array
+ *
+ * This macro calculates the size to be allocated for the stacks
+ * inside a stack array. It accepts the indicated "size" as a parameter
+ * and if required, pads some extra bytes (e.g. for MPU scenarios). Refer
+ * K_THREAD_STACK_ARRAY_DEFINE definition to see how this is used.
+ *
+ * @param size Size of the stack memory region
+ */
+#if defined(CONFIG_USERSPACE) && \
+	defined(CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT)
+#define _ARCH_THREAD_STACK_LEN(size) (POW2_CEIL(size))
+#else
+#define _ARCH_THREAD_STACK_LEN(size) ((size)+MPU_GUARD_ALIGN_AND_SIZE)
+#endif
+
+/**
+ * @brief Declare a top level array of thread stack memory regions
  *
  * Create an array of equally sized stacks. See K_THREAD_STACK_DEFINE
  * definition for additional details and constraints.
@@ -151,9 +181,18 @@ extern "C" {
  * @param nmemb Number of stacks to declare
  * @param size Size of the stack memory region
  */
+#if defined(CONFIG_USERSPACE) && \
+	defined(CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT)
 #define _ARCH_THREAD_STACK_ARRAY_DEFINE(sym, nmemb, size) \
-	struct _k_thread_stack_element __kernel_noinit __aligned(STACK_ALIGN) \
-		sym[nmemb][size+MPU_GUARD_ALIGN_AND_SIZE]
+	struct _k_thread_stack_element __kernel_noinit \
+		__aligned(POW2_CEIL(size)) \
+		sym[nmemb][_ARCH_THREAD_STACK_LEN(size)]
+#else
+#define _ARCH_THREAD_STACK_ARRAY_DEFINE(sym, nmemb, size) \
+	struct _k_thread_stack_element __kernel_noinit \
+		__aligned(STACK_ALIGN) \
+		sym[nmemb][_ARCH_THREAD_STACK_LEN(size)]
+#endif
 
 /**
  * @brief Declare an embedded stack memory region
@@ -167,9 +206,16 @@ extern "C" {
  * @param sym Thread stack symbol name
  * @param size Size of the stack memory region
  */
+#if defined(CONFIG_USERSPACE) && \
+	defined(CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT)
+#define _ARCH_THREAD_STACK_MEMBER(sym, size) \
+	struct _k_thread_stack_element __aligned(POW2_CEIL(size)) \
+		sym[POW2_CEIL(size)]
+#else
 #define _ARCH_THREAD_STACK_MEMBER(sym, size) \
 	struct _k_thread_stack_element __aligned(STACK_ALIGN) \
 		sym[size+MPU_GUARD_ALIGN_AND_SIZE]
+#endif
 
 /**
  * @brief Return the size in bytes of a stack memory region
@@ -178,8 +224,14 @@ extern "C" {
  * since the underlying implementation may actually create something larger
  * (for instance a guard area).
  *
- * The value returned here is guaranteed to match the 'size' parameter
+ * The value returned here is NOT guaranteed to match the 'size' parameter
  * passed to K_THREAD_STACK_DEFINE and related macros.
+ *
+ * In the case of CONFIG_USERSPACE=y and
+ * CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT, the size will be larger than the
+ * requested size.
+ *
+ * In all other configurations, the size will be correct.
  *
  * @param sym Stack memory symbol
  * @return Size of the stack
@@ -201,39 +253,9 @@ extern "C" {
 		((char *)(sym) + MPU_GUARD_ALIGN_AND_SIZE)
 
 #ifdef CONFIG_USERSPACE
-#ifdef CONFIG_ARM_MPU
+#ifdef CONFIG_CPU_HAS_ARM_MPU
 #ifndef _ASMLANGUAGE
 #include <arch/arm/cortex_m/mpu/arm_mpu.h>
-
-#define K_MEM_PARTITION_P_NA_U_NA	(NO_ACCESS | NOT_EXEC)
-#define K_MEM_PARTITION_P_RW_U_RW	(P_RW_U_RW | NOT_EXEC)
-#define K_MEM_PARTITION_P_RW_U_RO	(P_RW_U_RO | NOT_EXEC)
-#define K_MEM_PARTITION_P_RW_U_NA	(P_RW_U_NA | NOT_EXEC)
-#define K_MEM_PARTITION_P_RO_U_RO	(P_RO_U_RO | NOT_EXEC)
-#define K_MEM_PARTITION_P_RO_U_NA	(P_RO_U_NA | NOT_EXEC)
-
-/* Execution-allowed attributes */
-#define K_MEM_PARTITION_P_RWX_U_RWX	(P_RW_U_RW)
-#define K_MEM_PARTITION_P_RWX_U_RX	(P_RW_U_RO)
-#define K_MEM_PARTITION_P_RX_U_RX	(P_RO_U_RO)
-
-#define K_MEM_PARTITION_IS_WRITABLE(attr) \
-	({ \
-		int __is_writable__; \
-		switch (attr) { \
-		case P_RW_U_RW: \
-		case P_RW_U_RO: \
-		case P_RW_U_NA: \
-			__is_writable__ = 1; \
-			break; \
-		default: \
-			__is_writable__ = 0; \
-		} \
-		__is_writable__; \
-	})
-#define K_MEM_PARTITION_IS_EXECUTABLE(attr) \
-	(!((attr) & (NOT_EXEC)))
-
 #endif /* _ASMLANGUAGE */
 #define _ARCH_MEM_PARTITION_ALIGN_CHECK(start, size) \
 	BUILD_ASSERT_MSG(!(((size) & ((size) - 1))) && (size) >= 32 && \
@@ -241,8 +263,8 @@ extern "C" {
 		"the size of the partition must be power of 2" \
 		" and greater than or equal to 32." \
 		"start address of the partition must align with size.")
-#endif /* CONFIG_ARM_MPU*/
-#ifdef CONFIG_NXP_MPU
+#endif /* CONFIG_CPU_HAS_ARM_MPU */
+#ifdef CONFIG_CPU_HAS_NXP_MPU
 #ifndef _ASMLANGUAGE
 #include <arch/arm/cortex_m/mpu/nxp_mpu.h>
 
@@ -296,7 +318,7 @@ extern "C" {
 		"the size of the partition must align with 32" \
 		" and greater than or equal to 32." \
 		"start address of the partition must align with 32.")
-#endif  /* CONFIG_NXP_MPU */
+#endif  /* CONFIG_CPU_HAS_ARM_MPU */
 #endif /* CONFIG_USERSPACE */
 
 #ifndef _ASMLANGUAGE
@@ -304,62 +326,8 @@ extern "C" {
 typedef u32_t k_mem_partition_attr_t;
 #endif /* _ASMLANGUAGE */
 
-#ifdef CONFIG_ARM_USERSPACE
-#ifndef _ASMLANGUAGE
-/* Syscall invocation macros. arm-specific machine constraints used to ensure
- * args land in the proper registers. Currently, they are all stub functions
- * just for enabling CONFIG_USERSPACE on arm w/o errors.
- */
-
-static inline u32_t _arch_syscall_invoke6(u32_t arg1, u32_t arg2, u32_t arg3,
-					  u32_t arg4, u32_t arg5, u32_t arg6,
-					  u32_t call_id)
-{
-	return 0;
-}
-
-static inline u32_t _arch_syscall_invoke5(u32_t arg1, u32_t arg2, u32_t arg3,
-					  u32_t arg4, u32_t arg5, u32_t call_id)
-{
-	return 0;
-}
-
-static inline u32_t _arch_syscall_invoke4(u32_t arg1, u32_t arg2, u32_t arg3,
-					  u32_t arg4, u32_t call_id)
-{
-	return 0;
-}
-
-static inline u32_t _arch_syscall_invoke3(u32_t arg1, u32_t arg2, u32_t arg3,
-					  u32_t call_id)
-{
-	return 0;
-}
-
-static inline u32_t _arch_syscall_invoke2(u32_t arg1, u32_t arg2, u32_t call_id)
-{
-	return 0;
-}
-
-static inline u32_t _arch_syscall_invoke1(u32_t arg1, u32_t call_id)
-{
-	return 0;
-}
-
-static inline u32_t _arch_syscall_invoke0(u32_t call_id)
-{
-	return 0;
-}
-
-static inline int _arch_is_user_context(void)
-{
-	return 0;
-}
-#endif /* _ASMLANGUAGE */
-#endif /* CONFIG_ARM_USERSPACE */
-
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* _ARM_ARCH__H_ */
+#endif /* ZEPHYR_INCLUDE_ARCH_ARM_ARCH_H_ */

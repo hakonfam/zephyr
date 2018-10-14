@@ -1,5 +1,15 @@
+.. _usb_device_stack:
+
+USB device stack
+################
+
+.. contents::
+   :depth: 2
+   :local:
+   :backlinks: top
+
 USB Vendor and Product identifiers
-##################################
+**********************************
 
 The USB Vendor ID for the Zephyr project is 0x2FE3. The default USB Product
 ID for the Zephyr project is 0x100. The USB bcdDevice Device Release Number
@@ -13,14 +23,6 @@ The USB maintainer, if one is assigned, or otherwise the Zephyr Technical
 Steering Committee, may allocate other USB Product IDs based on well-motivated
 and documented requests.
 
-USB device stack
-################
-
-The USB device stack is split into three layers:
-   * USB Device Controller drivers (hardware dependent)
-   * USB device core driver (hardware independent)
-   * USB device class drivers (hardware independent)
-
 USB device controller drivers
 *****************************
 
@@ -28,132 +30,6 @@ The Device Controller Driver Layer implements the low level control routines
 to deal directly with the hardware. All device controller drivers should
 implement the APIs described in file usb_dc.h. This allows the integration of
 new USB device controllers to be done without changing the upper layers.
-For now only Quark SE USB device controller (Designware IP) is supported.
-
-Structures
-==========
-
-.. code-block:: c
-
-   struct usb_dc_ep_cfg_data {
-      u8_t ep_addr;
-      u16_t ep_mps;
-      enum usb_dc_ep_type ep_type;
-   };
-
-Structure containing the USB endpoint configuration.
-   * ep_addr: endpoint address, the number associated with the EP in the device
-     configuration structure.
-     IN  EP = 0x80 | <endpoint number>. OUT EP = 0x00 | <endpoint number>
-   * ep_mps: Endpoint max packet size.
-   * ep_type: Endpoint type, may be Bulk, Interrupt or Control. Isochronous
-     endpoints are not supported for now.
-
-.. code-block:: c
-
-   enum usb_dc_status_code {
-      USB_DC_ERROR,
-      USB_DC_RESET,
-      USB_DC_CONNECTED,
-      USB_DC_CONFIGURED,
-      USB_DC_DISCONNECTED,
-      USB_DC_SUSPEND,
-      USB_DC_RESUME,
-      USB_DC_UNKNOWN
-   };
-
-Status codes reported by the registered device status callback.
-   * USB_DC_ERROR: USB error reported by the controller.
-   * USB_DC_RESET: USB reset.
-   * USB_DC_CONNECTED: USB connection established - hardware enumeration is completed.
-   * USB_DC_CONFIGURED: USB configuration done.
-   * USB_DC_DISCONNECTED: USB connection lost.
-   * USB_DC_SUSPEND: USB connection suspended by the HOST.
-   * USB_DC_RESUME: USB connection resumed by the HOST.
-   * USB_DC_UNKNOWN: Initial USB connection status.
-
-.. code-block:: c
-
-   enum usb_dc_ep_cb_status_code {
-      USB_DC_EP_SETUP,
-      USB_DC_EP_DATA_OUT,
-      USB_DC_EP_DATA_IN,
-   };
-
-Status Codes reported by the registered endpoint callback.
-   * USB_DC_EP_SETUP: SETUP packet received.
-   * USB_DC_EP_DATA_OUT: Out transaction on this endpoint. Data is available
-     for read.
-   * USB_DC_EP_DATA_IN: In transaction done on this endpoint.
-
-APIs
-====
-
-The following APIs are provided by the device controller driver:
-
-:c:func:`usb_dc_attach()`
-   This function attaches USB for device connection. Upon success, the USB PLL
-   is enabled, and the USB device is now capable of transmitting and receiving
-   on the USB bus and of generating interrupts.
-
-:c:func:`usb_dc_detach()`
-   This function detaches the USB device. Upon success the USB hardware PLL is
-   powered down and USB communication is disabled.
-
-:c:func:`usb_dc_reset()`
-   This function returns the USB device to it's initial state.
-
-:c:func:`usb_dc_set_address()`
-   This function sets USB device address.
-
-:c:func:`usb_dc_set_status_callback()`
-   This function sets USB device controller status callback. The registered
-   callback is used to report changes in the status of the device controller.
-   The status code are described by the usb_dc_status_code enumeration.
-
-:c:func:`usb_dc_ep_configure()`
-   This function configures an endpoint. usb_dc_ep_cfg_data structure provides
-   the endpoint configuration parameters: endpoint address, endpoint maximum
-   packet size and endpoint type.
-
-:c:func:`usb_dc_ep_set_stall()`
-   This function sets stall condition for the selected endpoint.
-
-:c:func:`usb_dc_ep_clear_stall()`
-   This functions clears stall condition for the selected endpoint
-
-:c:func:`usb_dc_ep_is_stalled()`
-   This function check if selected endpoint is stalled.
-
-:c:func:`usb_dc_ep_halt()`
-   This function halts the selected endpoint
-
-:c:func:`usb_dc_ep_enable()`
-   This function enables the selected endpoint. Upon success interrupts are
-   enabled for the corresponding endpoint and the endpoint is ready for
-   transmitting/receiving data.
-
-:c:func:`usb_dc_ep_disable()`
-   This function disables the selected endpoint. Upon success interrupts are
-   disabled for the corresponding endpoint and the endpoint is no longer able
-   for transmitting/receiving data.
-
-:c:func:`usb_dc_ep_flush()`
-   This function flushes the FIFOs for the selected endpoint.
-
-:c:func:`usb_dc_ep_write()`
-   This function writes data to the specified endpoint. The supplied
-   usb_ep_callback function will be called when data is transmitted out.
-
-:c:func:`usb_dc_ep_read()`
-   This function is called by the Endpoint handler function, after an OUT
-   interrupt has been received for that EP. The application must only call this
-   function through the supplied usb_ep_callback function.
-
-:c:func:`usb_dc_ep_set_callback()`
-   This function sets callback function for notification of data received
-   and available to application or transmit done on the selected endpoint.
-   The callback status code is described by usb_dc_ep_cb_status_code.
 
 USB device core layer
 *********************
@@ -171,117 +47,6 @@ functionalities:
      customer applications. The APIs are described in the usb_device.h file.
    * Uses the APIs provided by the device controller drivers to interact with
      the USB device controller.
-
-Structures
-==========
-
-.. code-block:: c
-
-   typedef void (*usb_status_callback)(enum usb_dc_status_code status_code);
-
-Callback function signature for the device status.
-
-.. code-block:: c
-
-   typedef void (*usb_ep_callback)(u8_t ep,
-      enum usb_dc_ep_cb_status_code cb_status);
-
-Callback function signature for the USB Endpoint.
-
-.. code-block:: c
-
-   typedef int (*usb_request_handler) (struct usb_setup_packet *setup,
-      int *transfer_len, u8_t **payload_data);
-
-Callback function signature for class specific requests. For host to device
-direction the 'len' and 'payload_data' contain the length of the received data
-and the pointer to the received data respectively. For device to host class
-requests, 'len' and 'payload_data' should be set by the callback function
-with the length and the address of the data to be transmitted buffer
-respectively.
-
-.. code-block:: c
-
-   struct usb_ep_cfg_data {
-      usb_ep_callback ep_cb;
-      u8_t ep_addr;
-   };
-
-This structure contains configuration for a certain endpoint.
-   * ep_cb: callback function for notification of data received and available
-     to application or transmit done, NULL if callback not required by
-     application code.
-   * ep_addr: endpoint address. The number associated with the EP in the device
-     configuration structure.
-
-.. code-block:: c
-
-   struct usb_interface_cfg_data {
-      usb_request_handler class_handler;
-      usb_request_handler custom_handler;
-      u8_t *payload_data;
-   };
-
-This structure contains USB interface configuration.
-   * class_handler: handler for USB Class specific Control (EP 0)
-     communications.
-   * custom_handler: the custom request handler gets a first
-     chance at handling the request before it is handed over to the
-     'chapter 9' request handler.
-   * payload_data: this data area, allocated by the application, is used to
-     store class specific command data and must be large enough to store the
-     largest payload associated with the largest supported Class' command set.
-
-.. code-block:: c
-
-   struct usb_cfg_data {
-      const u8_t *usb_device_description;
-      usb_status_callback cb_usb_status;
-      struct usb_interface_cfg_data interface;
-      u8_t num_endpoints;
-      struct usb_ep_cfg_data *endpoint;
-   };
-
-This structure contains USB device configuration.
-   * usb_device_description: USB device description, see
-     http://www.beyondlogic.org/usbnutshell/usb5.shtml#DeviceDescriptors
-   * cb_usb_status: callback to be notified on USB connection status change
-   * interface:  USB class handlers and storage space.
-   * num_endpoints: number of individual endpoints in the device configuration
-   * endpoint: pointer to an array of endpoint configuration structures
-     (usb_cfg_data) of length equal to the number of EP associated with the
-     device description, not including control endpoints.
-
-The class drivers instantiates this with given parameters using the
-"usb_set_config" function.
-
-APIs
-====
-
-:c:func:`usb_set_config()`
-   This function configures USB device.
-
-:c:func:`usb_deconfig()`
-   This function returns the USB device back to it's initial state
-
-:c:func:`usb_enable()`
-   This function enable USB for host/device connection. Upon success, the USB
-   module is no longer clock gated in hardware, it is now capable of
-   transmitting and receiving on the USB bus and of generating interrupts.
-
-:c:func:`usb_disable()`
-   This function disables the USB device. Upon success, the USB module clock
-   is gated in hardware and it is no longer capable of generating interrupts.
-
-:c:func:`usb_write()`
-   write data to the specified endpoint. The supplied usb_ep_callback will be
-   called when transmission is done.
-
-:c:func:`usb_read()`
-   This function is called by the endpoint handler function after an OUT
-   interrupt has been received for that EP. The application must only call
-   this function through the supplied usb_ep_callback function.
-
 
 USB device class drivers
 ************************
@@ -525,18 +290,37 @@ class requests:
       return 0;
    }
 
-The class driver should wait for the USB_DC_CONFIGURED device status code
+The class driver should wait for the USB_DC_INTERFACE device status code
 before transmitting any data.
+
+There are two ways to transmit data, using the 'low' level read/write API or
+the 'high' level transfer API.
+
+low level API:
 
 To transmit data to the host, the class driver should call usb_write().
 Upon completion the registered endpoint callback will be called. Before
 sending another packet the class driver should wait for the completion of
-the previous transfer.
+the previous write. When data is received, the registered endpoint callback
+is called. usb_read() should be used for retrieving the received data.
+For CDC ACM sample driver this happens via the OUT bulk endpoint handler
+(cdc_acm_bulk_out) mentioned in the endpoint array (cdc_acm_ep_data).
 
-When data is received, the registered endpoint callback is called.
-usb_read() should be used for retrieving the received data. It must
-always be called through the registered endpoint callback. For CDC ACM
-sample driver this happens via the OUT bulk endpoint handler (cdc_acm_bulk_out)
-mentioned in the endpoint array (cdc_acm_ep_data).
+high level API:
 
-Only CDC ACM and DFU class driver examples are provided for now.
+The usb_transfer method can be used to transfer data to/from the host. The
+transfer API will automatically split the data transmission into one or more
+USB transaction(s), depending endpoint max packet size. The class driver does
+not have to implement endpoint callback and should set this callback to the
+generic usb_transfer_ep_callback.
+
+Further reading
+***************
+
+More information on the stack and its usage can be found in the following
+subsections:
+
+.. toctree::
+   :maxdepth: 2
+
+   ../../api/usb_api.rst

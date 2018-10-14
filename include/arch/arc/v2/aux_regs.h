@@ -12,8 +12,8 @@
  * Definitions for auxiliary registers.
  */
 
-#ifndef _ARC_V2_AUX_REGS__H_
-#define _ARC_V2_AUX_REGS__H_
+#ifndef ZEPHYR_INCLUDE_ARCH_ARC_V2_AUX_REGS_H_
+#define ZEPHYR_INCLUDE_ARCH_ARC_V2_AUX_REGS_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,6 +25,7 @@ extern "C" {
 #define _ARC_V2_SEC_STAT 0x09
 #define _ARC_V2_STATUS32 0x00a
 #define _ARC_V2_STATUS32_P0 0x00b
+#define _ARC_V2_USER_SP	0x00d
 #define _ARC_V2_AUX_IRQ_CTRL 0x00e
 #define _ARC_V2_IC_IVIC 0x010
 #define _ARC_V2_IC_CTRL 0x011
@@ -36,6 +37,8 @@ extern "C" {
 #define _ARC_V2_TMR0_LIMIT 0x023
 #define _ARC_V2_IRQ_VECT_BASE    0x025
 #define _ARC_V2_IRQ_VECT_BASE_S 0x26
+#define _ARC_V2_SEC_U_SP 0x39
+#define _ARC_V2_SEC_K_SP 0x3a
 #define _ARC_V2_AUX_IRQ_ACT 0x043
 #define _ARC_V2_DC_IVDC 0x047
 #define _ARC_V2_DC_CTRL 0x048
@@ -73,8 +76,14 @@ extern "C" {
 #define _ARC_V2_IRQ_PRIO_PEND 0x200
 #define _ARC_V2_AUX_IRQ_HINT 0x201
 #define _ARC_V2_IRQ_PRIORITY 0x206
+#define _ARC_V2_USTACK_TOP 0x260
+#define _ARC_V2_USTACK_BASE 0x261
+#define _ARC_V2_S_USTACK_TOP 0x262
+#define _ARC_V2_S_USTACK_BASE 0x263
 #define _ARC_V2_KSTACK_TOP 0x264
 #define _ARC_V2_KSTACK_BASE 0x265
+#define _ARC_V2_S_KSTACK_TOP 0x266
+#define _ARC_V2_S_KSTACK_BASE 0x267
 #define _ARC_V2_JLI_BASE 0x290
 #define _ARC_V2_LDI_BASE 0x291
 #define _ARC_V2_EI_BASE 0x292
@@ -82,6 +91,7 @@ extern "C" {
 #define _ARC_V2_ERSTATUS 0x402
 #define _ARC_V2_ECR 0x403
 #define _ARC_V2_EFA 0x404
+#define _ARC_V2_ERSEC_STAT 0x406
 #define _ARC_V2_ICAUSE 0x40a
 #define _ARC_V2_IRQ_SELECT 0x40b
 #define _ARC_V2_IRQ_ENABLE 0x40c
@@ -102,7 +112,8 @@ extern "C" {
 #define _ARC_V2_STATUS32_AE_BIT 5
 #define _ARC_V2_STATUS32_AE (1 << _ARC_V2_STATUS32_AE_BIT)
 #define _ARC_V2_STATUS32_DE (1 << 6)
-#define _ARC_V2_STATUS32_U (1 << 7)
+#define _ARC_V2_STATUS32_U_BIT 7
+#define _ARC_V2_STATUS32_U (1 << _ARC_V2_STATUS32_U_BIT)
 #define _ARC_V2_STATUS32_V (1 << 8)
 #define _ARC_V2_STATUS32_C (1 << 9)
 #define _ARC_V2_STATUS32_N (1 << 10)
@@ -113,7 +124,23 @@ extern "C" {
 #define _ARC_V2_STATUS32_SC (1 << _ARC_V2_STATUS32_SC_BIT)
 #define _ARC_V2_STATUS32_ES (1 << 15)
 #define _ARC_V2_STATUS32_RB(x) ((x) << 16)
+#define _ARC_V2_STATUS32_US_BIT 20
+#define _ARC_V2_STATUS32_US (1 << _ARC_V2_STATUS32_US_BIT)
 #define _ARC_V2_STATUS32_IE (1 << 31)
+
+/* SEC_STAT bits */
+#define _ARC_V2_SEC_STAT_SSC_BIT 0
+#define _ARC_V2_SEC_STAT_SSC (1 << _ARC_V2_SEC_STAT_SSC_BIT)
+#define _ARC_V2_SEC_STAT_NSRT_BIT 1
+#define _ARC_V2_SEC_STAT_NSRT (1 << _ARC_V2_SEC_STAT_NSRT_BIT)
+#define _ARC_V2_SEC_STAT_NSRU_BIT 2
+#define _ARC_V2_SEC_STAT_NSRU (1 << _ARC_V2_SEC_STAT_NSRU_BIT)
+#define _ARC_V2_SEC_STAT_IRM_BIT 3
+#define _ARC_V2_SEC_STAT_IRM (1 << _ARC_V2_SEC_STAT_IRM_BIT)
+#define _ARC_V2_SEC_STAT_SUE_BIT 4
+#define _ARC_V2_SEC_STAT_SUE (1 << _ARC_V2_SEC_STAT_SUE_BIT)
+#define _ARC_V2_SEC_STAT_NIC_BIT 5
+#define _ARC_V2_SEC_STAT_NIC (1 << _ARC_V2_SEC_STAT_NIC_BIT)
 
 /* interrupt related bits */
 #define _ARC_V2_IRQ_PRIORITY_SECURE 0x100
@@ -154,4 +181,4 @@ extern "C" {
 }
 #endif
 
-#endif /* _ARC_V2_AUX_REGS__H_ */
+#endif /* ZEPHYR_INCLUDE_ARCH_ARC_V2_AUX_REGS_H_ */

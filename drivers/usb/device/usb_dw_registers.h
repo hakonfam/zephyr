@@ -12,8 +12,8 @@
  * definitions.
  */
 
-#ifndef __USB_DW_REGISTERS_H__
-#define __USB_DW_REGISTERS_H__
+#ifndef ZEPHYR_DRIVERS_USB_DEVICE_USB_DW_REGISTERS_H_
+#define ZEPHYR_DRIVERS_USB_DEVICE_USB_DW_REGISTERS_H_
 
 #include <misc/util.h>
 #include <board.h>
@@ -121,6 +121,9 @@ struct usb_dw_reg {
 
 /* USB register offsets and masks */
 #define USB_DW_HWCFG4_DEDFIFOMODE BIT(25)
+#define USB_DW_GUSBCFG_PHY_IF_MASK BIT(3)
+#define USB_DW_GUSBCFG_PHY_IF_8_BIT (0)
+#define USB_DW_GUSBCFG_PHY_IF_16_BIT (1<<3)
 #define USB_DW_GRSTCTL_AHB_IDLE BIT(31)
 #define USB_DW_GRSTCTL_TX_FNUM_OFFSET (6)
 #define USB_DW_GRSTCTL_TX_FFLSH BIT(5)
@@ -136,6 +139,8 @@ struct usb_dw_reg {
 #define USB_DW_GINTSTS_USB_SUSP BIT(11)
 #define USB_DW_GINTSTS_RX_FLVL BIT(4)
 #define USB_DW_GINTSTS_OTG_INT BIT(2)
+#define USB_DW_DCFG_DEV_SPD_USB2_HS (0)
+#define USB_DW_DCFG_DEV_SPD_USB2_FS (0x1)
 #define USB_DW_DCFG_DEV_SPD_LS (0x2)
 #define USB_DW_DCFG_DEV_SPD_FS (0x3)
 #define USB_DW_DCFG_DEV_ADDR_MASK (0x7F << 4)
@@ -197,19 +202,16 @@ struct usb_dw_reg {
 #define USB_DW_CORE_RST_TIMEOUT_US 10000
 #define USB_DW_PLL_TIMEOUT_US 100
 
-#if defined(CONFIG_SOC_QUARK_SE_C1000)
-#define USB_DW_BASE QM_USB_0_BASE
-#define USB_DW_IRQ QM_IRQ_USB_0_INT
-#else
-#error "Unsupported board"
-#endif
-
 #define USB_DW_EP_FIFO(ep) (*(u32_t *)(USB_DW_BASE + 0x1000 * (ep + 1)))
 /* USB register block base address */
 #define USB_DW ((struct usb_dw_reg *)USB_DW_BASE)
+
+#define DW_USB_IN_EP_NUM		(6)
+#define DW_USB_OUT_EP_NUM		(4)
+#define DW_USB_MAX_PACKET_SIZE		(64)
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __USB_DW_REGISTERS_H__ */
+#endif /* ZEPHYR_DRIVERS_USB_DEVICE_USB_DW_REGISTERS_H_ */

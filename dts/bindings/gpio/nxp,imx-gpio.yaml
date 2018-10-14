@@ -16,6 +16,7 @@ properties:
       category: required
       description: compatible strings
       constraint: "nxp,imx-gpio"
+      generation: define
 
     reg:
       type: int
@@ -35,7 +36,11 @@ properties:
       description: Human readable string describing the device (used by Zephyr for API name)
       generation: define
 
-cell_string: GPIO
+    rdc:
+     type: int
+     category: required
+     description: Set the RDC permission for this peripheral
+     generation: define
 
 "#cells":
   - pin

@@ -16,15 +16,47 @@
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
 	};
+
+	/* These aliases are provided for compatibility with samples */
+	aliases {
+		led0 = &led0;
+		led1 = &led1;
+		led2 = &led2;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		led0: led_0 {
+			gpios = <&porta 17 0>;
+			label = "LED";
+		};
+		led1: led_1 {
+			gpios = <&porta 27 0>;
+			label = "TX";
+		};
+		led2: led_2 {
+			gpios = <&portb 3 0>;
+			label = "RX";
+		};
+	};
+
+};
+
+&sercom0 {
+	status = "ok";
+	compatible = "atmel,sam0-uart";
+	current-speed = <115200>;
 };
 
 &sercom5 {
 	status = "ok";
+	compatible = "atmel,sam0-uart";
 	current-speed = <115200>;
 };
-&sercom0 {
+
+&sercom4 {
 	status = "ok";
-	current-speed = <115200>;
+	compatible = "atmel,sam0-spi";
 };
 
 &flash0 {
@@ -38,11 +70,15 @@
 		 * and is used by NFFS if enabled.
 		 */
 
-#if defined(CONFIG_FILE_SYSTEM_NFFS)
-		nffs_partition: partition@3c000 {
-			label = "nffs";
+#if defined(CONFIG_FS_FLASH_STORAGE_PARTITION)
+		storage_partition: partition@3c000 {
+			label = "storage";
 			reg = <0x0003c000 0x00004000>;
 		};
 #endif
 	};
+};
+
+&usb0 {
+	status = "ok";
 };

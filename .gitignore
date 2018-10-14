@@ -7,18 +7,20 @@
 *.swp
 *.swo
 *~
-build
+build*/
 cscope.*
 .dir
+
+/*.patch
+
+# The .cache directory will be used to cache toolchain capabilities if
+# no suitable out-of-tree directory is found.
+.cache
+
 outdir
 outdir-*
 scripts/basic/fixdep
 scripts/gen_idt/gen_idt
-scripts/kconfig/conf
-scripts/kconfig/mconf
-scripts/kconfig/zconf.hash.c
-scripts/kconfig/zconf.lex.c
-scripts/kconfig/zconf.tab.c
 doc/_build
 doc/doxygen
 doc/xml
@@ -27,13 +29,18 @@ doc/boards
 doc/samples
 doc/latex
 doc/themes/zephyr-docs-theme
-sanity-out/
+sanity-out*
 scripts/grub
-doc/reference/kconfig/CONFIG_*
-doc/reference/kconfig/index.rst
+doc/reference/kconfig/*.rst
 doc/doc.warnings
 tags
-.project
-.cproject
-.xxproject
+.*project
+.settings
 .envrc
+.vscode
+hide-defaults-note
+
+# Tag files
+GPATH
+GRTAGS
+GTAGS

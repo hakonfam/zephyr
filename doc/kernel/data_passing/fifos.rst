@@ -1,6 +1,6 @@
 .. _fifos_v2:
 
-Fifos
+FIFOs
 #####
 
 A :dfn:`fifo` is a kernel object that implements a traditional
@@ -24,10 +24,13 @@ A fifo has the following key properties:
 
 A fifo must be initialized before it can be used. This sets its queue to empty.
 
-Fifo data items must be aligned on a 4-byte boundary, as the kernel reserves
-the first 32 bits of an item for use as a pointer to the next data item in
-the queue. Consequently, a data item that holds N bytes of application data
-requires N+4 bytes of memory.
+FIFO data items must be aligned on a 4-byte boundary, as the kernel reserves
+the first 32 bits of an item for use as a pointer to the next data item in the
+queue. Consequently, a data item that holds N bytes of application data
+requires N+4 bytes of memory. There are no alignment or reserved space
+requirements for data items if they are added with
+:cpp:func:`k_fifo_alloc_put()`, instead additional memory is temporarily
+allocated from the calling thread's resource pool.
 
 A data item may be **added** to a fifo by a thread or an ISR.
 The item is given directly to a waiting thread, if one exists;
@@ -56,7 +59,7 @@ without waiting.
 Implementation
 **************
 
-Defining a Fifo
+Defining a FIFO
 ===============
 
 A fifo is defined using a variable of type :c:type:`struct k_fifo`.
@@ -79,7 +82,7 @@ The following code has the same effect as the code segment above.
 
     K_FIFO_DEFINE(my_fifo);
 
-Writing to a Fifo
+Writing to a FIFO
 =================
 
 A data item is added to a fifo by calling :cpp:func:`k_fifo_put()`.
@@ -112,7 +115,12 @@ to send data to one or more consumer threads.
 Additionally, a singly-linked list of data items can be added to a fifo
 by calling :cpp:func:`k_fifo_put_list()` or :cpp:func:`k_fifo_put_slist()`.
 
-Reading from a Fifo
+Finally, a data item can be added to a fifo with :cpp:func:`k_fifo_alloc_put()`.
+With this API, there is no need to reserve space for the kernel's use in
+the data item, instead additional memory will be allocated from the calling
+thread's resource pool until the item is read.
+
+Reading from a FIFO
 ===================
 
 A data item is removed from a fifo by calling :cpp:func:`k_fifo_get()`.
@@ -155,6 +163,7 @@ The following fifo APIs are provided by :file:`kernel.h`:
 
 * :c:macro:`K_FIFO_DEFINE`
 * :cpp:func:`k_fifo_init()`
+* :cpp:func:`k_fifo_alloc_put()`
 * :cpp:func:`k_fifo_put()`
 * :cpp:func:`k_fifo_put_list()`
 * :cpp:func:`k_fifo_put_slist()`

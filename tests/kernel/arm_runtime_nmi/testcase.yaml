@@ -1,4 +1,4 @@
 tests:
-  test:
+  arch.interrupt:
     arch_whitelist: arm
-    tags: core bat_commit
+    tags: nmi interrupt

@@ -6,11 +6,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#if defined(CONFIG_NET_DEBUG_APP)
-#define SYS_LOG_DOMAIN "net/app"
-#define NET_SYS_LOG_LEVEL SYS_LOG_LEVEL_DEBUG
-#define NET_LOG_ENABLED 1
-#endif
+#define LOG_MODULE_NAME net_app_client
+#define NET_LOG_LEVEL CONFIG_NET_APP_LOG_LEVEL
 
 #include <zephyr.h>
 #include <string.h>
@@ -80,7 +77,8 @@ static int resolve_name(struct net_app_ctx *ctx,
 	ret = dns_get_addr_info(peer_addr_str, type, &ctx->client.dns_id,
 				dns_cb, ctx, timeout);
 	if (ret < 0) {
-		NET_ERR("Cannot resolve %s (%d)", peer_addr_str, ret);
+		NET_ERR("Cannot resolve %s (%d)", log_strdup(peer_addr_str),
+			ret);
 		ctx->client.dns_id = 0;
 		return ret;
 	}
@@ -89,7 +87,8 @@ static int resolve_name(struct net_app_ctx *ctx,
 	 * the DNS will timeout before the semaphore.
 	 */
 	if (k_sem_take(&ctx->client.dns_wait, timeout + K_SECONDS(1))) {
-		NET_ERR("Timeout while resolving %s", peer_addr_str);
+		NET_ERR("Timeout while resolving %s",
+			log_strdup(peer_addr_str));
 		ctx->client.dns_id = 0;
 		return -ETIMEDOUT;
 	}
@@ -110,14 +109,14 @@ static int try_resolve(struct net_app_ctx *ctx,
 		       s32_t timeout)
 {
 #if !defined(CONFIG_DNS_RESOLVER)
-	NET_ERR("Invalid IP address %s", peer_addr_str);
 	return -EINVAL;
 #else
 	int ret;
 
 	ret = resolve_name(ctx, peer_addr_str, type, timeout);
 	if (ret < 0) {
-		NET_ERR("Cannot resolve %s (%d)", peer_addr_str, ret);
+		NET_ERR("Cannot resolve %s (%d)",
+			log_strdup(peer_addr_str), ret);
 	}
 
 	return ret;
@@ -271,7 +270,7 @@ static void close_net_ctx(struct net_app_ctx *ctx)
 		ctx->ipv4.ctx = NULL;
 	}
 #endif
-#if defined(CONFIG_NET_APP_SERVER)
+#if defined(CONFIG_NET_APP_SERVER) && defined(CONFIG_NET_TCP)
 	{
 		int i;
 
@@ -292,8 +291,8 @@ static int bind_local(struct net_app_ctx *ctx)
 #if defined(CONFIG_NET_IPV4)
 	if (ctx->ipv4.remote.sa_family == AF_INET && ctx->ipv4.ctx) {
 		ctx->ipv4.local.sa_family = AF_INET;
-		_net_app_set_local_addr(&ctx->ipv4.local, NULL,
-					net_sin(&ctx->ipv4.local)->sin_port);
+		_net_app_set_local_addr(ctx, &ctx->ipv4.local, NULL,
+				ntohs(net_sin(&ctx->ipv4.local)->sin_port));
 
 		ret = _net_app_set_net_ctx(ctx, ctx->ipv4.ctx,
 					   &ctx->ipv4.local,
@@ -309,8 +308,8 @@ static int bind_local(struct net_app_ctx *ctx)
 #if defined(CONFIG_NET_IPV6)
 	if (ctx->ipv6.remote.sa_family == AF_INET6 && ctx->ipv6.ctx) {
 		ctx->ipv6.local.sa_family = AF_INET6;
-		_net_app_set_local_addr(&ctx->ipv6.local, NULL,
-				       net_sin6(&ctx->ipv6.local)->sin6_port);
+		_net_app_set_local_addr(ctx, &ctx->ipv6.local, NULL,
+				ntohs(net_sin6(&ctx->ipv6.local)->sin6_port));
 
 		ret = _net_app_set_net_ctx(ctx, ctx->ipv6.ctx,
 					   &ctx->ipv6.local,
@@ -350,8 +349,8 @@ int net_app_init_client(struct net_app_ctx *ctx,
 		return -EALREADY;
 	}
 
-	memset(&addr, 0, sizeof(addr));
-	memset(&remote_addr, 0, sizeof(remote_addr));
+	(void)memset(&addr, 0, sizeof(addr));
+	(void)memset(&remote_addr, 0, sizeof(remote_addr));
 
 	if (peer_addr) {
 		memcpy(&remote_addr, peer_addr, sizeof(remote_addr));
@@ -373,29 +372,48 @@ int net_app_init_client(struct net_app_ctx *ctx,
 					   strlen(base_peer_addr),
 					   &remote_addr);
 
-#if defined(CONFIG_NET_IPV6)
-		if (remote_addr.sa_family == AF_INET6) {
-			net_sin6(&remote_addr)->sin6_port = htons(peer_port);
-		}
-#endif
-#if defined(CONFIG_NET_IPV4)
-		if (remote_addr.sa_family == AF_INET) {
-			net_sin(&remote_addr)->sin_port = htons(peer_port);
-		}
-#endif
-
 		/* The remote_addr will be used by set_remote_addr() to
 		 * set the actual peer address.
 		 */
 	}
 
 	if (client_addr) {
-		memcpy(&addr, client_addr, sizeof(addr));
+		u16_t local_port = 0;
+		bool empty_addr = false;
 
-		if (addr.sa_family != remote_addr.sa_family) {
-			NET_DBG("Address family mismatch %d vs %d",
-				addr.sa_family, remote_addr.sa_family);
-			return -EINVAL;
+		addr.sa_family = remote_addr.sa_family;
+
+		/* local_port is used if the IP address isn't specified */
+#if defined(CONFIG_NET_IPV4)
+		if (client_addr->sa_family == AF_INET) {
+			empty_addr = net_is_ipv4_addr_unspecified(
+					&net_sin(client_addr)->sin_addr);
+			local_port = net_sin(client_addr)->sin_port;
+		}
+#endif
+
+#if defined(CONFIG_NET_IPV6)
+		if (client_addr->sa_family == AF_INET6) {
+			empty_addr = net_is_ipv6_addr_unspecified(
+					&net_sin6(client_addr)->sin6_addr);
+			local_port = net_sin6(client_addr)->sin6_port;
+		}
+#endif
+
+		if (empty_addr) {
+			if (remote_addr.sa_family == AF_INET6) {
+				net_sin6(&addr)->sin6_port = local_port;
+			} else {
+				net_sin(&addr)->sin_port = local_port;
+			}
+		} else {
+			memcpy(&addr, client_addr, sizeof(addr));
+
+			if (addr.sa_family != remote_addr.sa_family) {
+				NET_DBG("Address family mismatch %d vs %d",
+					addr.sa_family, remote_addr.sa_family);
+				return -EINVAL;
+			}
 		}
 	} else {
 		addr.sa_family = remote_addr.sa_family;
@@ -458,6 +476,22 @@ int net_app_init_client(struct net_app_ctx *ctx,
 	    ctx->default_ctx->remote.sa_family == AF_UNSPEC) {
 		NET_ERR("Unknown protocol family.");
 		return -EPFNOSUPPORT;
+	}
+
+	/* Set the port now that we know the sa_family */
+	if (!peer_addr) {
+#if defined(CONFIG_NET_IPV6)
+		if (ctx->default_ctx->remote.sa_family == AF_INET6) {
+			net_sin6(&ctx->default_ctx->remote)->sin6_port =
+				htons(peer_port);
+		}
+#endif
+#if defined(CONFIG_NET_IPV4)
+		if (ctx->default_ctx->remote.sa_family == AF_INET) {
+			net_sin(&ctx->default_ctx->remote)->sin_port =
+				htons(peer_port);
+		}
+#endif
 	}
 
 	ret = bind_local(ctx);
@@ -633,7 +667,8 @@ static void check_local_address(struct net_app_ctx *ctx,
 		/* Just take the first IPv4 address of an interface */
 		iface = net_context_get_iface(net_ctx);
 		if (iface) {
-			laddr = &iface->ipv4.unicast[0].address.in_addr;
+			laddr =
+			    &iface->config.ip.ipv4->unicast[0].address.in_addr;
 			net_ipaddr_copy(&net_sin(&ctx->ipv4.local)->sin_addr,
 					laddr);
 		} else {

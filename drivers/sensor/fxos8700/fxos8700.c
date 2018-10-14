@@ -216,7 +216,7 @@ static int fxos8700_channel_get(struct device *dev, enum sensor_channel chan,
 			ret = 0;
 		}
 #ifdef CONFIG_FXOS8700_TEMP
-		if (chan == SENSOR_CHAN_TEMP) {
+		if (chan == SENSOR_CHAN_DIE_TEMP) {
 			fxos8700_temp_convert(val, data->temp);
 			ret = 0;
 		}
@@ -332,6 +332,8 @@ static int fxos8700_init(struct device *dev)
 		return -EIO;
 	}
 
+	k_sem_init(&data->sem, 0, UINT_MAX);
+
 #if CONFIG_FXOS8700_TRIGGER
 	if (fxos8700_trigger_init(dev)) {
 		SYS_LOG_ERR("Could not initialize interrupts");
@@ -344,8 +346,7 @@ static int fxos8700_init(struct device *dev)
 		SYS_LOG_ERR("Could not set active");
 		return -EIO;
 	}
-
-	k_sem_init(&data->sem, 1, UINT_MAX);
+	k_sem_give(&data->sem);
 
 	SYS_LOG_DBG("Init complete");
 

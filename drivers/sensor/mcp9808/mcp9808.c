@@ -46,7 +46,7 @@ static int mcp9808_sample_fetch(struct device *dev, enum sensor_channel chan)
 {
 	struct mcp9808_data *data = dev->driver_data;
 
-	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL || chan == SENSOR_CHAN_TEMP);
+	__ASSERT_NO_MSG(chan == SENSOR_CHAN_ALL || chan == SENSOR_CHAN_AMBIENT_TEMP);
 
 	return mcp9808_reg_read(data, MCP9808_REG_TEMP_AMB, &data->reg_val);
 }
@@ -57,7 +57,7 @@ static int mcp9808_channel_get(struct device *dev,
 {
 	struct mcp9808_data *data = dev->driver_data;
 
-	__ASSERT_NO_MSG(chan == SENSOR_CHAN_TEMP);
+	__ASSERT_NO_MSG(chan == SENSOR_CHAN_AMBIENT_TEMP);
 
 	val->val1 = (data->reg_val & MCP9808_TEMP_INT_MASK) >>
 		     MCP9808_TEMP_INT_SHIFT;
@@ -92,12 +92,11 @@ int mcp9808_init(struct device *dev)
 
 	mcp9808_setup_interrupt(dev);
 
-	dev->driver_api = &mcp9808_api_funcs;
-
 	return 0;
 }
 
 struct mcp9808_data mcp9808_data;
 
-DEVICE_INIT(mcp9808, CONFIG_MCP9808_DEV_NAME, mcp9808_init, &mcp9808_data,
-	    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY);
+DEVICE_AND_API_INIT(mcp9808, CONFIG_MCP9808_DEV_NAME, mcp9808_init,
+		    &mcp9808_data, NULL, POST_KERNEL,
+		    CONFIG_SENSOR_INIT_PRIORITY, &mcp9808_api_funcs);

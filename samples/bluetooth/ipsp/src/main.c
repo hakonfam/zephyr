@@ -22,8 +22,8 @@
 #include <net/udp.h>
 
 /* admin-local, dynamically allocated multicast address */
-#define MCAST_IP6ADDR { { { 0xff, 0x84, 0, 0, 0, 0, 0, 0, \
-			    0, 0, 0, 0, 0, 0, 0, 0x2 } } }
+#define MCAST_IP6ADDR { { { 0xff, 0x02, 0, 0, 0, 0, 0, 0, \
+			    0, 0, 0, 0, 0, 0, 0, 0x1 } } }
 
 struct in6_addr in6addr_mcast = MCAST_IP6ADDR;
 
@@ -69,10 +69,10 @@ static inline void init_app(void)
 	k_sem_init(&quit_lock, 0, UINT_MAX);
 
 	if (net_addr_pton(AF_INET6,
-			  CONFIG_NET_APP_MY_IPV6_ADDR,
+			  CONFIG_NET_CONFIG_MY_IPV6_ADDR,
 			  &in6addr_my) < 0) {
 		SYS_LOG_ERR("Invalid IPv6 address %s",
-			    CONFIG_NET_APP_MY_IPV6_ADDR);
+			    CONFIG_NET_CONFIG_MY_IPV6_ADDR);
 	}
 
 	do {

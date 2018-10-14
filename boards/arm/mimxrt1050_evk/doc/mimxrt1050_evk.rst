@@ -15,6 +15,9 @@ Bluetooth™, GPS, displays, and camera sensors. As with other i.MX processors,
 i.MX RT1050 also has rich audio and video features, including LCD display,
 basic 2D graphics, camera interface, SPDIF, and I2S audio interface.
 
+The following document refers to the discontinued MIMXRT1050-EVK board. For the
+MIMXRT1050-EVKB board, refer to `Board Revisions`_ section.
+
 .. image:: mimxrt1050_evk.jpg
    :width: 720px
    :align: center
@@ -34,6 +37,7 @@ Hardware
 - Display
 
   - LCD connector
+  - Touch connector
 
 - Ethernet
 
@@ -95,6 +99,8 @@ features:
 +-----------+------------+-------------------------------------+
 | GPIO      | on-chip    | gpio                                |
 +-----------+------------+-------------------------------------+
+| SPI       | on-chip    | spi                                 |
++-----------+------------+-------------------------------------+
 | UART      | on-chip    | serial port-polling;                |
 |           |            | serial port-interrupt               |
 +-----------+------------+-------------------------------------+
@@ -113,11 +119,23 @@ The MIMXRT1050 SoC has five pairs of pinmux/gpio controllers.
 +---------------+-----------------+---------------------------+
 | Name          | Function        | Usage                     |
 +===============+=================+===========================+
+| GPIO_AD_B0_00 | LPSPI3_SCK      | SPI                       |
++---------------+-----------------+---------------------------+
+| GPIO_AD_B0_01 | LPSPI3_SDO      | SPI                       |
++---------------+-----------------+---------------------------+
+| GPIO_AD_B0_02 | LPSPI3_SDI      | SPI                       |
++---------------+-----------------+---------------------------+
+| GPIO_AD_B0_03 | LPSPI3_PCS0     | SPI                       |
++---------------+-----------------+---------------------------+
 | GPIO_AD_B0_09 | GPIO            | LED                       |
 +---------------+-----------------+---------------------------+
 | GPIO_AD_B0_12 | LPUART1_TX      | UART Console              |
 +---------------+-----------------+---------------------------+
 | GPIO_AD_B0_13 | LPUART1_RX      | UART Console              |
++---------------+-----------------+---------------------------+
+| GPIO_AD_B1_06 | LPUART3_TX      | UART BT HCI               |
++---------------+-----------------+---------------------------+
+| GPIO_AD_B1_07 | LPUART3_RX      | UART BT HCI               |
 +---------------+-----------------+---------------------------+
 | WAKEUP        | GPIO            | SW0                       |
 +---------------+-----------------+---------------------------+
@@ -131,7 +149,8 @@ board with the on-chip PLL to generate a 600 MHz core clock.
 Serial Port
 ===========
 
-The MIMXRT1050 SoC has eight UARTs. One is configured for the console and the
+The MIMXRT1050 SoC has eight UARTs. ``LPUART1`` is configured for the console,
+``LPUART3`` for the Bluetooth Host Controller Interface (BT HCI), and the
 remaining are not used.
 
 Programming and Debugging
@@ -172,12 +191,25 @@ your Zephyr application to flash. It will leave you at a GDB prompt.
    :board: mimxrt1050_evk
    :goals: debug
 
+Board Revisions
+***************
+
+The original MIMXRT1050-EVK (rev A0) board was updated with a newer
+MIMXRT1050-EVKB (rev A1) board, with these major hardware differences::
+
+- SoC changed from MIMXRT1052DVL6**A** to MIMXRT1052DVL6**B**
+- Hardware bug fixes for: power, interfaces, and memory
+- Arduino headers included
+
+For more details, please see the following `NXP i.MXRT1050 A0 to A1 Migration Guide`_.
+
+Current Zephyr build supports the new MIMXRT1050-EVKB
 
 .. _MIMXRT1050-EVK Website:
    https://www.nxp.com/products/microcontrollers-and-processors/arm-based-processors-and-mcus/i.mx-applications-processors/i.mx-rt-series/i.mx-rt1050-evaluation-kit:MIMXRT1050-EVK
 
 .. _MIMXRT1050-EVK User Guide:
-   https://www.nxp.com/docs/en/user-guide/MIMXRT1050EVKHUG.pdf
+   https://www.nxp.com/docs/en/user-guide/IMXRT1050EVKBHUG.pdf
 
 .. _MIMXRT1050-EVK Schematics:
    https://www.nxp.com/webapp/Download?colCode=MIMXRT1050-EVK-DESIGNFILES
@@ -196,3 +228,6 @@ your Zephyr application to flash. It will leave you at a GDB prompt.
 
 .. _Segger J-Link OpenSDA V2.1 Firmware:
    https://www.segger.com/downloads/jlink/OpenSDA_V2_1.bin
+
+.. _NXP i.MXRT1050 A0 to A1 Migration Guide:
+   https://www.nxp.com/docs/en/nxp/application-notes/AN12146.pdf

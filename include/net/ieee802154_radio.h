@@ -9,11 +9,12 @@
  * @brief Public IEEE 802.15.4 Radio API
  */
 
-#ifndef __IEEE802154_RADIO_H__
-#define __IEEE802154_RADIO_H__
+#ifndef ZEPHYR_INCLUDE_NET_IEEE802154_RADIO_H_
+#define ZEPHYR_INCLUDE_NET_IEEE802154_RADIO_H_
 
 #include <device.h>
 #include <net/net_if.h>
+#include <net/net_pkt.h>
 #include <net/ieee802154.h>
 
 #ifdef __cplusplus
@@ -39,6 +40,8 @@ enum ieee802154_filter_type {
 	IEEE802154_FILTER_TYPE_IEEE_ADDR,
 	IEEE802154_FILTER_TYPE_SHORT_ADDR,
 	IEEE802154_FILTER_TYPE_PAN_ID,
+	IEEE802154_FILTER_TYPE_SRC_IEEE_ADDR,
+	IEEE802154_FILTER_TYPE_SRC_SHORT_ADDR,
 };
 
 struct ieee802154_filter {
@@ -69,10 +72,11 @@ struct ieee802154_radio_api {
 	/** Set current channel */
 	int (*set_channel)(struct device *dev, u16_t channel);
 
-	/** Set address filters (for IEEE802154_HW_FILTER ) */
-	int (*set_filter)(struct device *dev,
-			  enum ieee802154_filter_type type,
-			  const struct ieee802154_filter *filter);
+	/** Set/Unset filters (for IEEE802154_HW_FILTER ) */
+	int (*filter)(struct device *dev,
+		      bool set,
+		      enum ieee802154_filter_type type,
+		      const struct ieee802154_filter *filter);
 
 	/** Set TX power level in dbm */
 	int (*set_txpower)(struct device *dev, s16_t dbm);
@@ -92,16 +96,35 @@ struct ieee802154_radio_api {
 	/** Get the available amount of Sub-GHz channels */
 	u16_t (*get_subg_channel_count)(struct device *dev);
 #endif /* CONFIG_NET_L2_IEEE802154_SUB_GHZ */
+
+#ifdef CONFIG_NET_L2_OPENTHREAD
+	/** Run an energy detection scan.
+	 * Note: channel must be set prior to request this function.
+	 * duration parameter is in ms.
+	 */
+	int (*ed_scan)(struct device *dev,
+		       u16_t duration,
+		       void (*done_cb)(struct device *dev,
+				       s16_t max_ed));
+#endif /* CONFIG_NET_L2_OPENTHREAD */
 } __packed;
+
+#define IEEE802154_AR_FLAG_SET (0x20)
 
 /**
  * @brief Check if AR flag is set on the frame inside given net_pkt
  *
- * @param pkt A valid pointer on a net_pkt structure, must not be NULL.
+ * @param pkt A valid pointer on a net_pkt structure, must not be NULL,
+ *        and its length should be at least made of 1 byte (ACK frames
+ *        are the smallest frames on 15.4 and made of 3 bytes, not
+ *        not counting the FCS part).
  *
  * @return True if AR flag is set, False otherwise
  */
-bool ieee802154_is_ar_flag_set(struct net_pkt *pkt);
+static inline bool ieee802154_is_ar_flag_set(struct net_pkt *pkt)
+{
+	return (*net_pkt_ll(pkt) & IEEE802154_AR_FLAG_SET);
+}
 
 #ifndef CONFIG_IEEE802154_RAW_MODE
 
@@ -166,4 +189,4 @@ static inline enum net_verdict ieee802154_radio_handle_ack(struct net_if *iface,
  * @}
  */
 
-#endif /* __IEEE802154_RADIO_H__ */
+#endif /* ZEPHYR_INCLUDE_NET_IEEE802154_RADIO_H_ */

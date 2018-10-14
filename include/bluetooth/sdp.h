@@ -7,8 +7,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#ifndef __BT_SDP_H
-#define __BT_SDP_H
+#ifndef ZEPHYR_INCLUDE_BLUETOOTH_SDP_H_
+#define ZEPHYR_INCLUDE_BLUETOOTH_SDP_H_
 
 /**
  * @brief Service Discovery Protocol (SDP)
@@ -556,8 +556,8 @@ int bt_sdp_discover_cancel(struct bt_conn *conn,
 
 /** @brief Protocols to be asked about specific parameters */
 enum bt_sdp_proto {
-	BT_SDP_PROTO_RFCOMM = BT_UUID_RFCOMM_VAL,
-	BT_SDP_PROTO_L2CAP  = BT_UUID_L2CAP_VAL,
+	BT_SDP_PROTO_RFCOMM = 0x0003,
+	BT_SDP_PROTO_L2CAP  = 0x0100,
 };
 
 /** @brief Give to user parameter value related to given stacked protocol UUID.
@@ -609,4 +609,4 @@ int bt_sdp_get_features(const struct net_buf *buf, u16_t *features);
  * @}
  */
 
-#endif /* __BT_SDP_H */
+#endif /* ZEPHYR_INCLUDE_BLUETOOTH_SDP_H_ */

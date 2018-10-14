@@ -10,8 +10,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef __NET_CONTEXT_H
-#define __NET_CONTEXT_H
+#ifndef ZEPHYR_INCLUDE_NET_NET_CONTEXT_H_
+#define ZEPHYR_INCLUDE_NET_NET_CONTEXT_H_
 
 /**
  * @brief Application network context
@@ -184,6 +184,8 @@ struct net_tcp;
 
 struct net_conn_handle;
 
+struct tls_context;
+
 /**
  * Note that we do not store the actual source IP address in the context
  * because the address is already be set in the network interface struct.
@@ -238,19 +240,6 @@ struct net_context {
 	net_pkt_get_pool_func_t data_pool;
 #endif /* CONFIG_NET_CONTEXT_NET_PKT_POOL */
 
-#if defined(CONFIG_NET_CONTEXT_SYNC_RECV)
-	/**
-	 * Semaphore to signal synchronous recv call completion.
-	 */
-	struct k_sem recv_data_wait;
-#endif /* CONFIG_NET_CONTEXT_SYNC_RECV */
-
-	/** Network interface assigned to this context */
-	u8_t iface;
-
-	/** Flags for the context */
-	u8_t flags;
-
 #if defined(CONFIG_NET_TCP)
 	/** TCP connection information */
 	struct net_tcp *tcp;
@@ -261,13 +250,44 @@ struct net_context {
 	void *net_app;
 #endif /* CONFIG_NET_APP */
 
+#if defined(CONFIG_NET_CONTEXT_SYNC_RECV)
+	/**
+	 * Semaphore to signal synchronous recv call completion.
+	 */
+	struct k_sem recv_data_wait;
+#endif /* CONFIG_NET_CONTEXT_SYNC_RECV */
+
 #if defined(CONFIG_NET_SOCKETS)
 	/** Per-socket packet or connection queues */
 	union {
 		struct k_fifo recv_q;
 		struct k_fifo accept_q;
 	};
+
+#if defined(CONFIG_NET_SOCKETS_SOCKOPT_TLS)
+	/** TLS context information */
+	struct tls_context *tls;
+#endif /* CONFIG_NET_SOCKETS_SOCKOPT_TLS */
 #endif /* CONFIG_NET_SOCKETS */
+
+#if defined(CONFIG_NET_OFFLOAD)
+	/** context for use by offload drivers */
+	void *offload_context;
+#endif /* CONFIG_NET_OFFLOAD */
+
+	/** Option values */
+	struct {
+#if defined(CONFIG_NET_CONTEXT_PRIORITY)
+		/** Priority of the network data sent via this net_context */
+		u8_t priority;
+#endif
+	} options;
+
+	/** Network interface assigned to this context */
+	u8_t iface;
+
+	/** Flags for the context */
+	u8_t flags;
 };
 
 static inline bool net_context_is_used(struct net_context *context)
@@ -547,6 +567,58 @@ int net_context_ref(struct net_context *context);
 int net_context_unref(struct net_context *context);
 
 /**
+ * @brief Create IPv4 packet in provided net_pkt from context
+ *
+ * @param context Network context for a connection
+ * @param pkt Network packet
+ * @param src Source address, or NULL to choose a default
+ * @param dst Destination IPv4 address
+ *
+ * @return Return network packet that contains the IPv4 packet.
+ */
+#if defined(CONFIG_NET_IPV4)
+struct net_pkt *net_context_create_ipv4(struct net_context *context,
+					struct net_pkt *pkt,
+					const struct in_addr *src,
+					const struct in_addr *dst);
+#else
+static inline
+struct net_pkt *net_context_create_ipv4(struct net_context *context,
+					struct net_pkt *pkt,
+					const struct in_addr *src,
+					const struct in_addr *dst)
+{
+	return NULL;
+}
+#endif /* CONFIG_NET_IPV4 */
+
+/**
+ * @brief Create IPv6 packet in provided net_pkt from context
+ *
+ * @param context Network context for a connection
+ * @param pkt Network packet
+ * @param src Source address, or NULL to choose a default from context
+ * @param dst Destination IPv6 address
+ *
+ * @return Return network packet that contains the IPv6 packet.
+ */
+#if defined(CONFIG_NET_IPV6)
+struct net_pkt *net_context_create_ipv6(struct net_context *context,
+					struct net_pkt *pkt,
+					const struct in6_addr *src,
+					const struct in6_addr *dst);
+#else
+static inline
+struct net_pkt *net_context_create_ipv6(struct net_context *context,
+					struct net_pkt *pkt,
+					const struct in6_addr *src,
+					const struct in6_addr *dst)
+{
+	return NULL;
+}
+#endif /* CONFIG_NET_IPV6 */
+
+/**
  * @brief Assign a socket a local address.
  *
  * @details This is similar as BSD bind() function.
@@ -769,6 +841,38 @@ int net_context_recv(struct net_context *context,
 int net_context_update_recv_wnd(struct net_context *context,
 				s32_t delta);
 
+enum net_context_option {
+	NET_OPT_PRIORITY = 1,
+};
+
+/**
+ * @brief Set an connection option for this context.
+ *
+ * @param context The network context to use.
+ * @param option Option to set
+ * @param value Option value
+ * @param len Option length
+ *
+ * @return 0 if ok, <0 if error
+ */
+int net_context_set_option(struct net_context *context,
+			   enum net_context_option option,
+			   const void *value, size_t len);
+
+/**
+ * @brief Get connection option value for this context.
+ *
+ * @param context The network context to use.
+ * @param option Option to set
+ * @param value Option value
+ * @param len Option length (returned to caller)
+ *
+ * @return 0 if ok, <0 if error
+ */
+int net_context_get_option(struct net_context *context,
+			   enum net_context_option option,
+			   void *value, size_t *len);
+
 /**
  * @typedef net_context_cb_t
  * @brief Callback used while iterating over network contexts
@@ -829,4 +933,4 @@ static inline void net_context_setup_pools(struct net_context *context,
  * @}
  */
 
-#endif /* __NET_CONTEXT_H */
+#endif /* ZEPHYR_INCLUDE_NET_NET_CONTEXT_H_ */

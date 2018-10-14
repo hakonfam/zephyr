@@ -4,15 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#if 1
 #if defined(CONFIG_HTTPS)
-#define SYS_LOG_DOMAIN "https-server"
+#define LOG_MODULE_NAME net_https_server_sample
 #else
-#define SYS_LOG_DOMAIN "http-server"
+#define LOG_MODULE_NAME net_http_server_sample
 #endif
-#define NET_SYS_LOG_LEVEL SYS_LOG_LEVEL_DEBUG
-#define NET_LOG_ENABLED 1
-#endif
+#define NET_LOG_LEVEL LOG_LEVEL_DBG
 
 #include <zephyr.h>
 #include <stdio.h>
@@ -108,22 +105,28 @@ void panic(const char *msg)
 
 static int http_response(struct http_ctx *ctx, const char *header,
 			 const char *payload, size_t payload_len,
-			 char *str)
+			 char *str, const struct sockaddr *dst)
 {
 	int ret;
 
-	ret = http_add_header(ctx, header, str);
+	ret = http_add_header(ctx, header, dst, str);
 	if (ret < 0) {
 		NET_ERR("Cannot add HTTP header (%d)", ret);
 		return ret;
 	}
 
-	ret = http_add_header(ctx, HTTP_CRLF, str);
+	ret = http_add_header(ctx, HTTP_CRLF, dst, str);
 	if (ret < 0) {
 		return ret;
 	}
 
-	ret = http_send_chunk(ctx, payload, payload_len, str);
+	ret = http_send_chunk(ctx, payload, payload_len, dst, str);
+	if (ret < 0) {
+		NET_ERR("Cannot send data to peer (%d)", ret);
+		return ret;
+	}
+
+	ret = http_send_chunk(ctx, NULL, 0, dst, NULL);
 	if (ret < 0) {
 		NET_ERR("Cannot send data to peer (%d)", ret);
 		return ret;
@@ -132,7 +135,8 @@ static int http_response(struct http_ctx *ctx, const char *header,
 	return http_send_flush(ctx, str);
 }
 
-static int http_response_soft_404(struct http_ctx *ctx)
+static int http_response_soft_404(struct http_ctx *ctx,
+				  const struct sockaddr *dst)
 {
 	static const char *not_found =
 		HTML_HEADER
@@ -140,7 +144,7 @@ static int http_response_soft_404(struct http_ctx *ctx)
 		HTML_FOOTER;
 
 	return http_response(ctx, HTTP_STATUS_200_OK, not_found,
-			     strlen(not_found), "Error");
+			     strlen(not_found), "Error", dst);
 }
 
 /* Prints the received HTTP header fields as an HTML list */
@@ -202,7 +206,8 @@ static void print_http_headers(struct http_ctx *ctx,
 		 "<h2>Server: %s</h2>"HTML_FOOTER, CONFIG_ARCH);
 }
 
-int http_serve_headers(struct http_ctx *ctx)
+int http_serve_headers(struct http_ctx *ctx,
+		       const struct sockaddr *dst)
 {
 #define HTTP_MAX_BODY_STR_SIZE		1024
 	static char html_body[HTTP_MAX_BODY_STR_SIZE];
@@ -210,10 +215,11 @@ int http_serve_headers(struct http_ctx *ctx)
 	print_http_headers(ctx, html_body, HTTP_MAX_BODY_STR_SIZE);
 
 	return http_response(ctx, HTTP_STATUS_200_OK, html_body,
-			     strlen(html_body), "Headers");
+			     strlen(html_body), "Headers", dst);
 }
 
-static int http_serve_index_html(struct http_ctx *ctx)
+static int http_serve_index_html(struct http_ctx *ctx,
+				 const struct sockaddr *dst)
 {
 	static const char index_html[] = {
 #include "index.html.inc"
@@ -223,11 +229,12 @@ static int http_serve_index_html(struct http_ctx *ctx)
 		sizeof(index_html));
 
 	return http_response(ctx, HTTP_STATUS_200_OK, index_html,
-			     sizeof(index_html), "Index");
+			     sizeof(index_html), "Index", dst);
 }
 
 static void http_connected(struct http_ctx *ctx,
 			   enum http_connection_type type,
+			   const struct sockaddr *dst,
 			   void *user_data)
 {
 	char url[32];
@@ -242,21 +249,21 @@ static void http_connected(struct http_ctx *ctx,
 	if (type == HTTP_CONNECTION) {
 		if (strncmp(ctx->http.url, "/",
 			    ctx->http.url_len) == 0) {
-			http_serve_index_html(ctx);
+			http_serve_index_html(ctx, dst);
 			http_close(ctx);
 			return;
 		}
 
 		if (strncmp(ctx->http.url, "/index.html",
 			    ctx->http.url_len) == 0) {
-			http_serve_index_html(ctx);
+			http_serve_index_html(ctx, dst);
 			http_close(ctx);
 			return;
 		}
 
 		if (strncmp(ctx->http.url, "/headers",
 			    ctx->http.url_len) == 0) {
-			http_serve_headers(ctx);
+			http_serve_headers(ctx, dst);
 			http_close(ctx);
 			return;
 		}
@@ -265,7 +272,7 @@ static void http_connected(struct http_ctx *ctx,
 	/* Give 404 error for all the other URLs we do not want to handle
 	 * right now.
 	 */
-	http_response_soft_404(ctx);
+	http_response_soft_404(ctx, dst);
 	http_close(ctx);
 }
 
@@ -273,6 +280,7 @@ static void http_received(struct http_ctx *ctx,
 			  struct net_pkt *pkt,
 			  int status,
 			  u32_t flags,
+			  const struct sockaddr *dst,
 			  void *user_data)
 {
 	if (!status) {
@@ -317,14 +325,15 @@ static const char *get_string(int str_len, const char *str)
 }
 
 static enum http_verdict default_handler(struct http_ctx *ctx,
-					 enum http_connection_type type)
+					 enum http_connection_type type,
+					 const struct sockaddr *dst)
 {
 	NET_DBG("No handler for %s URL %s",
 		type == HTTP_CONNECTION ? "HTTP" : "WS",
 		get_string(ctx->http.url_len, ctx->http.url));
 
 	if (type == HTTP_CONNECTION) {
-		http_response_soft_404(ctx);
+		http_response_soft_404(ctx, dst);
 	}
 
 	return HTTP_VERDICT_DROP;
@@ -393,7 +402,7 @@ void main(void)
 
 #elif ADDR_OPTION == 2
 	/* Accept any local listening address */
-	memset(&addr, 0, sizeof(addr));
+	(void)memset(&addr, 0, sizeof(addr));
 
 	net_sin(&addr)->sin_port = htons(ZEPHYR_PORT);
 
@@ -404,7 +413,7 @@ void main(void)
 
 #elif ADDR_OPTION == 3
 	/* Set the bind address according to your configuration */
-	memset(&addr, 0, sizeof(addr));
+	(void)memset(&addr, 0, sizeof(addr));
 
 	/* In this example, listen only IPv6 */
 	addr.family = AF_INET6;

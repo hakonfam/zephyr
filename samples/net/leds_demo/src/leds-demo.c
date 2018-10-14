@@ -4,11 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#if 1
-#define SYS_LOG_DOMAIN "coap-server"
-#define NET_SYS_LOG_LEVEL SYS_LOG_LEVEL_DEBUG
-#define NET_LOG_ENABLED 1
-#endif
+#define LOG_MODULE_NAME net_leds_demo
+#define NET_LOG_LEVEL LOG_LEVEL_DBG
 
 #include <errno.h>
 
@@ -37,13 +34,17 @@
 #define MY_IP6ADDR \
 	{ { { 0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1 } } }
 
-#if defined(LED0_GPIO_PORT)
-#define LED_GPIO_NAME LED0_GPIO_PORT
-#define LED_PIN LED0_GPIO_PIN
+#ifndef LED0_GPIO_CONTROLLER
+#ifdef LED0_GPIO_PORT
+#define LED0_GPIO_CONTROLLER 	LED0_GPIO_PORT
 #else
-#define LED_GPIO_NAME "(fail)"
-#define LED_PIN 0
+#define LED0_GPIO_CONTROLLER "(fail)"
+#define LED0_GPIO_PIN 0
 #endif
+#endif
+
+#define LED_GPIO_NAME LED0_GPIO_CONTROLLER
+#define LED_PIN LED0_GPIO_PIN
 
 static struct net_context *context;
 

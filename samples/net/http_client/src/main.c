@@ -4,11 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#if 1
-#define SYS_LOG_DOMAIN "http-client"
-#define NET_SYS_LOG_LEVEL SYS_LOG_LEVEL_DEBUG
-#define NET_LOG_ENABLED 1
-#endif
+#define LOG_MODULE_NAME net_http_client_sample
+#define NET_LOG_LEVEL LOG_LEVEL_DBG
 
 #include <zephyr.h>
 #include <errno.h>
@@ -424,6 +421,7 @@ static void http_received(struct http_ctx *ctx,
 			  struct net_pkt *pkt,
 			  int status,
 			  u32_t flags,
+			  const struct sockaddr *dst,
 			  void *user_data)
 {
 	if (!status) {

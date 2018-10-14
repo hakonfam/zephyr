@@ -36,14 +36,14 @@ static int hdc1008_sample_fetch(struct device *dev, enum sensor_channel chan)
 	gpio_pin_enable_callback(drv_data->gpio, CONFIG_HDC1008_GPIO_PIN_NUM);
 
 	buf[0] = HDC1008_REG_TEMP;
-	if (i2c_write(drv_data->i2c, buf, 1, HDC1008_I2C_ADDRESS) < 0) {
+	if (i2c_write(drv_data->i2c, buf, 1, CONFIG_HDC1008_I2C_ADDR) < 0) {
 		SYS_LOG_DBG("Failed to write address pointer");
 		return -EIO;
 	}
 
 	k_sem_take(&drv_data->data_sem, K_FOREVER);
 
-	if (i2c_read(drv_data->i2c, buf, 4, HDC1008_I2C_ADDRESS) < 0) {
+	if (i2c_read(drv_data->i2c, buf, 4, CONFIG_HDC1008_I2C_ADDR) < 0) {
 		SYS_LOG_DBG("Failed to read sample data");
 		return -EIO;
 	}
@@ -67,16 +67,18 @@ static int hdc1008_channel_get(struct device *dev,
 	 * Register" sections for more details on processing
 	 * sample data.
 	 */
-	if (chan == SENSOR_CHAN_TEMP) {
+	if (chan == SENSOR_CHAN_AMBIENT_TEMP) {
 		/* val = -40 + 165 * sample / 2^16 */
 		tmp = 165 * (u64_t)drv_data->t_sample;
 		val->val1 = (s32_t)(tmp >> 16) - 40;
 		val->val2 = (1000000 * (tmp & 0xFFFF)) >> 16;
 	} else if (chan == SENSOR_CHAN_HUMIDITY) {
-		/* val = 100000 * sample / 2^16 */
-		tmp = 100000 * (u64_t)drv_data->rh_sample;
-		val->val1 = tmp >> 16;
-		val->val2 = (1000000 * (tmp & 0xFFFF)) >> 16;
+		/* val = 100 * sample / 2^16 */
+		u32_t tmp2;
+		tmp2 = 100 * (u32_t)drv_data->rh_sample;
+		val->val1 = tmp2 >> 16;
+		/* x * 1000000 / 65536 == x * 15625 / 1024 */
+		val->val2 = (15625 * (tmp2 & 0xFFFF)) >> 10;
 	} else {
 		return -ENOTSUP;
 	}
@@ -109,11 +111,14 @@ static int hdc1008_init(struct device *dev)
 			    CONFIG_HDC1008_I2C_MASTER_DEV_NAME);
 		return -EINVAL;
 	}
-	if (read16(drv_data->i2c, HDC1008_I2C_ADDRESS, HDC1000_MANUFID) != 0x5449) {
+
+	if (read16(drv_data->i2c, CONFIG_HDC1008_I2C_ADDR, HDC1000_MANUFID)
+	    != 0x5449) {
 		SYS_LOG_ERR("Failed to get correct manufacturer ID");
 		return -EINVAL;
 	}
-	if (read16(drv_data->i2c, HDC1008_I2C_ADDRESS, HDC1000_DEVICEID) != 0x1000) {
+	if (read16(drv_data->i2c, CONFIG_HDC1008_I2C_ADDR, HDC1000_DEVICEID)
+	    != 0x1000) {
 		SYS_LOG_ERR("Failed to get correct device ID");
 		return -EINVAL;
 	}
@@ -130,6 +135,9 @@ static int hdc1008_init(struct device *dev)
 
 	gpio_pin_configure(drv_data->gpio, CONFIG_HDC1008_GPIO_PIN_NUM,
 			   GPIO_DIR_IN | GPIO_INT | GPIO_INT_EDGE |
+#if defined(CONFIG_HDC1008_GPIO_FLAGS)
+			   CONFIG_HDC1008_GPIO_FLAGS |
+#endif
 			   GPIO_INT_ACTIVE_LOW | GPIO_INT_DEBOUNCE);
 
 	gpio_init_callback(&drv_data->gpio_cb,
@@ -141,12 +149,11 @@ static int hdc1008_init(struct device *dev)
 		return -EIO;
 	}
 
-	dev->driver_api = &hdc1008_driver_api;
-
 	return 0;
 }
 
 static struct hdc1008_data hdc1008_data;
 
-DEVICE_INIT(hdc1008, CONFIG_HDC1008_NAME, hdc1008_init, &hdc1008_data,
-	    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY);
+DEVICE_AND_API_INIT(hdc1008, CONFIG_HDC1008_NAME, hdc1008_init, &hdc1008_data,
+		    NULL, POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY,
+		    &hdc1008_driver_api);

@@ -10,8 +10,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef _DMA_H_
-#define _DMA_H_
+#ifndef ZEPHYR_INCLUDE_DMA_H_
+#define ZEPHYR_INCLUDE_DMA_H_
 
 #include <kernel.h>
 #include <device.h>
@@ -32,6 +32,13 @@ enum dma_channel_direction {
 	MEMORY_TO_MEMORY = 0x0,
 	MEMORY_TO_PERIPHERAL,
 	PERIPHERAL_TO_MEMORY
+};
+
+/** Valid values for @a source_addr_adj and @a dest_addr_adj */
+enum dma_addr_adj {
+	DMA_ADDR_ADJ_INCREMENT,
+	DMA_ADDR_ADJ_DECREMENT,
+	DMA_ADDR_ADJ_NO_CHANGE,
 };
 
 /**
@@ -190,6 +197,9 @@ static inline int dma_config(struct device *dev, u32_t channel,
  * @brief Enables DMA channel and starts the transfer, the channel must be
  *        configured beforehand.
  *
+ * Implementations must check the validity of the channel ID passed in and
+ * return -EINVAL if it is invalid.
+ *
  * @param dev     Pointer to the device structure for the driver instance.
  * @param channel Numeric identification of the channel where the transfer will
  *                be processed
@@ -197,7 +207,9 @@ static inline int dma_config(struct device *dev, u32_t channel,
  * @retval 0 if successful.
  * @retval Negative errno code if failure.
  */
-static inline int dma_start(struct device *dev, u32_t channel)
+__syscall int dma_start(struct device *dev, u32_t channel);
+
+static inline int _impl_dma_start(struct device *dev, u32_t channel)
 {
 	const struct dma_driver_api *api = dev->driver_api;
 
@@ -207,6 +219,9 @@ static inline int dma_start(struct device *dev, u32_t channel)
 /**
  * @brief Stops the DMA transfer and disables the channel.
  *
+ * Implementations must check the validity of the channel ID passed in and
+ * return -EINVAL if it is invalid.
+ *
  * @param dev     Pointer to the device structure for the driver instance.
  * @param channel Numeric identification of the channel where the transfer was
  *                being processed
@@ -214,7 +229,9 @@ static inline int dma_start(struct device *dev, u32_t channel)
  * @retval 0 if successful.
  * @retval Negative errno code if failure.
  */
-static inline int dma_stop(struct device *dev, u32_t channel)
+__syscall int dma_stop(struct device *dev, u32_t channel);
+
+static inline int _impl_dma_stop(struct device *dev, u32_t channel)
 {
 	const struct dma_driver_api *api = dev->driver_api;
 
@@ -287,4 +304,6 @@ static inline u32_t dma_burst_index(u32_t burst)
 }
 #endif
 
-#endif /* _DMA_H_ */
+#include <syscalls/dma.h>
+
+#endif /* ZEPHYR_INCLUDE_DMA_H_ */

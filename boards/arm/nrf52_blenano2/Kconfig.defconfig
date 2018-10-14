@@ -7,29 +7,29 @@
 if BOARD_NRF52_BLENANO2
 
 config BOARD
-	default nrf52_blenano2
+	default "nrf52_blenano2"
 
-if GPIO_NRF5
+if I2C
 
-config GPIO_NRF5_P0
-	default y
+config I2C_NRFX
+	def_bool y
 
-endif # GPIO_NRF5
+if I2C_NRFX
 
-if UART_NRF5
+config I2C_0
+	def_bool y
 
-config UART_NRF5_GPIO_TX_PIN
-	default 29
+endif #I2C_NRFX
 
-config UART_NRF5_GPIO_RX_PIN
-	default 30
+if I2C_0
 
-config UART_NRF5_GPIO_RTS_PIN
-	default 2
+choice I2C_0_NRF_TYPE
+	default I2C_0_NRF_TWIM
 
-config UART_NRF5_GPIO_CTS_PIN
-	default 28
+endchoice
 
-endif # UART_NRF5
+endif # I2C_0
+
+endif # I2C
 
 endif # BOARD_NRF52_BLENANO2

@@ -8,7 +8,7 @@
 if BOARD_OLIMEXINO_STM32
 
 config BOARD
-	default olimexino_stm32
+	default "olimexino_stm32"
 
 if UART_CONSOLE
 
@@ -32,6 +32,16 @@ config SPI_STM32_INTERRUPT
 config SPI_1
 	default y
 
+config SPI_2
+	default y
+
 endif # SPI
+
+if PWM
+
+config PWM_STM32_1
+	default y
+
+endif # PWM
 
 endif # BOARD_OLIMEXINO_STM32

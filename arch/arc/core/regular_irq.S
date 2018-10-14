@@ -53,10 +53,18 @@ SECTION_FUNC(TEXT, _rirq_enter)
 
 
 #ifdef CONFIG_ARC_STACK_CHECKING
+#ifdef CONFIG_ARC_HAS_SECURE
+	lr r2, [_ARC_V2_SEC_STAT]
+	bclr r2, r2, _ARC_V2_SEC_STAT_SSC_BIT
+	/* sflag r2 */
+	/* sflag instruction is not supported in current ARC GNU */
+	.long 0x00bf302f
+#else
 	/* disable stack checking */
 	lr r2, [_ARC_V2_STATUS32]
 	bclr r2, r2, _ARC_V2_STATUS32_SC_BIT
 	kflag r2
+#endif
 #endif
 	clri
 	ld r1, [exc_nest_count]
@@ -95,6 +103,10 @@ SECTION_FUNC(TEXT, _rirq_exit)
 	bne.d	_rirq_return_from_rirq
 	st	r0, [r1]
 
+#ifdef CONFIG_STACK_SENTINEL
+	bl _check_stack_sentinel
+#endif
+
 #ifdef CONFIG_PREEMPT_ENABLED
 
 	mov r1, _kernel
@@ -104,16 +116,6 @@ SECTION_FUNC(TEXT, _rirq_exit)
 	 * Lock interrupts to ensure kernel queues do not change from this
 	 * point on until return from interrupt.
 	 */
-
-
-	/*
-	 * Non-preemptible thread ? Do not schedule (see explanation of
-	 * preempt field in kernel_struct.h).
-	 */
-	ldh_s r0, [r2, _thread_offset_to_preempt]
-	mov r3, _NON_PREEMPT_THRESHOLD
-	cmp_s r0, r3
-	bhs.d _rirq_no_reschedule
 
 	/*
 	 * Both (a)reschedule and (b)non-reschedule cases need to load the
@@ -149,11 +151,7 @@ _rirq_common_interrupt_swap:
 	/* r2 contains pointer to new thread */
 
 #ifdef CONFIG_ARC_STACK_CHECKING
-	/* Use stack top and base registers from restored context */
-	ld r3, [r2, _thread_offset_to_stack_base]
-	sr r3, [_ARC_V2_KSTACK_BASE]
-	ld r3, [r2, _thread_offset_to_stack_top]
-	sr r3, [_ARC_V2_KSTACK_TOP]
+	_load_stack_check_regs
 #endif
 	/*
 	 * _load_callee_saved_regs expects incoming thread in r2.
@@ -161,17 +159,10 @@ _rirq_common_interrupt_swap:
 	 */
 	_load_callee_saved_regs
 
-#ifdef CONFIG_MPU_STACK_GUARD
+#if defined(CONFIG_MPU_STACK_GUARD) || defined(CONFIG_USERSPACE)
 	push_s r2
 	mov r0, r2
-	bl configure_mpu_stack_guard
-	pop_s r2
-#endif
-
-#ifdef CONFIG_USERSPACE
-	push_s r2
-	mov r0, r2
-	bl configure_mpu_mem_domain
+	bl configure_mpu_thread
 	pop_s r2
 #endif
 
@@ -187,44 +178,27 @@ _rirq_common_interrupt_swap:
 .balign 4
 _rirq_return_from_coop:
 
-	/* status32 and pc (blink) are already on the stack in the right order */
+	/*
+	 * status32, sec_stat (when CONFIG_ARC_HAS_SECURE is enabled) and pc
+	 * (blink) are already on the stack in the right order
+	 */
+	ld_s r0, [sp, ___isf_t_status32_OFFSET - ___isf_t_pc_OFFSET]
 
 	/* update status32.ie (explanation in firq_exit:_firq_return_from_coop) */
-	ld_s r0, [sp, 4]
+
 	ld_s r3, [r2, _thread_offset_to_intlock_key]
 	st  0, [r2, _thread_offset_to_intlock_key]
 	cmp r3, 0
 	or.ne r0, r0, _ARC_V2_STATUS32_IE
-	st_s r0, [sp, 4]
+
+	st_s r0, [sp, ___isf_t_status32_OFFSET - ___isf_t_pc_OFFSET]
 
 	/* carve fake stack */
+	sub sp, sp, ___isf_t_pc_OFFSET
 
-#ifdef  CONFIG_ARC_HAS_SECURE
-/* a) status32/pc are already on the stack
- * 	pc
- * 	status
- * b) make a space for sec_stat
- * c) adjust the right place for sec_stat and pc
- *	pc
- *	sec_stat
- *	status
- * d) a real value will be pushed in r0
- */
-	ld_s r0, [sp]
-	push_s r0
-	lr r0, [_ARC_V2_SEC_STAT]
-	st_s r0, [sp, 4]
-	sub sp, sp, (___isf_t_SIZEOF - 16)
-#else
-	/*
-	 * a) status32/pc are already on the stack
-	 * b) a real value will be pushed in r0
-	 */
-	sub sp, sp, (___isf_t_SIZEOF - 12)
-#endif
-	/* push return value on stack */
+	/* update return value on stack */
 	ld_s r0, [r2, _thread_offset_to_return_value]
-	push_s r0
+	st_s r0, [sp, ___isf_t_r0_OFFSET]
 
 	/*
 	 * r13 is part of both the callee and caller-saved register sets because

@@ -5,6 +5,8 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
 
 #ifndef __ZEPHYR__
 
@@ -14,6 +16,8 @@
 #include <unistd.h>
 
 #else
+#define LOG_MODULE_NAME net_dump_http_download
+#define NET_LOG_LEVEL LOG_LEVEL_DBG
 
 #include <net/socket.h>
 #include <kernel.h>
@@ -23,9 +27,13 @@
 
 #endif
 
+#define PORT 8080
+
 #ifndef USE_BIG_PAYLOAD
 #define USE_BIG_PAYLOAD 1
 #endif
+
+#define CHECK(r) { if (r == -1) { printf("Error: " #r "\n"); exit(1); } }
 
 static const char content[] = {
 #if USE_BIG_PAYLOAD
@@ -40,15 +48,19 @@ int main(void)
 	int serv;
 	struct sockaddr_in bind_addr;
 	static int counter;
+	int ret;
 
 	serv = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	CHECK(serv);
 
 	bind_addr.sin_family = AF_INET;
 	bind_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	bind_addr.sin_port = htons(8080);
-	bind(serv, (struct sockaddr *)&bind_addr, sizeof(bind_addr));
+	bind_addr.sin_port = htons(PORT);
+	CHECK(bind(serv, (struct sockaddr *)&bind_addr, sizeof(bind_addr)));
 
-	listen(serv, 5);
+	CHECK(listen(serv, 5));
+
+	printf("Single-threaded dumb HTTP server waits for a connection on port %d...\n", PORT);
 
 	while (1) {
 		struct sockaddr_in client_addr;
@@ -60,6 +72,11 @@ int main(void)
 
 		int client = accept(serv, (struct sockaddr *)&client_addr,
 				    &client_addr_len);
+		if (client < 0) {
+			printf("Error in accept: %d - continuing\n", errno);
+			continue;
+		}
+
 		inet_ntop(client_addr.sin_family, &client_addr.sin_addr,
 			  addr_str, sizeof(addr_str));
 		printf("Connection #%d from %s\n", counter++, addr_str);
@@ -68,9 +85,19 @@ int main(void)
 		 * connection reset error).
 		 */
 		while (1) {
+			ssize_t r;
 			char c;
 
-			recv(client, &c, 1, 0);
+			r = recv(client, &c, 1, 0);
+			if (r < 0) {
+				if (errno == EAGAIN || errno == EINTR) {
+					continue;
+				}
+
+				printf("Got error %d when receiving from "
+				       "socket\n", errno);
+				goto close_client;
+			}
 			if (req_state == 0 && c == '\r') {
 				req_state++;
 			} else if (req_state == 1 && c == '\n') {
@@ -97,8 +124,14 @@ int main(void)
 			len -= sent_len;
 		}
 
-		close(client);
-		printf("Connection from %s closed\n", addr_str);
+close_client:
+		ret = close(client);
+		if (ret == 0) {
+			printf("Connection from %s closed\n", addr_str);
+		} else {
+			printf("Got error %d while closing the "
+			       "socket\n", errno);
+		}
 
 #if defined(__ZEPHYR__) && defined(CONFIG_NET_BUF_POOL_USAGE)
 		struct k_mem_slab *rx, *tx;

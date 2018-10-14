@@ -21,9 +21,49 @@
 #include <arch/x86/segmentation.h>
 #include <exception.h>
 #include <inttypes.h>
+#include <exc_handle.h>
+#include <logging/log_ctrl.h>
 
 __weak void _debug_fatal_hook(const NANO_ESF *esf) { ARG_UNUSED(esf); }
 
+#if defined(CONFIG_EXCEPTION_STACK_TRACE)
+struct stack_frame {
+	u32_t next;
+	u32_t ret_addr;
+	u32_t args;
+};
+
+#define MAX_STACK_FRAMES 8
+
+static void unwind_stack(u32_t base_ptr)
+{
+	struct stack_frame *frame;
+	int i;
+
+	if (!base_ptr) {
+		printk("NULL base ptr\n");
+		return;
+	}
+
+	for (i = 0; i < MAX_STACK_FRAMES; i++) {
+		if (base_ptr % sizeof(base_ptr) != 0) {
+			printk("unaligned frame ptr\n");
+			return;
+		}
+
+		frame = (struct stack_frame *)base_ptr;
+		if (!frame || !frame->ret_addr) {
+			break;
+		}
+#ifdef CONFIG_X86_IAMCU
+		printk("     0x%08x\n", frame->ret_addr);
+#else
+		printk("     0x%08x (0x%x)\n", frame->ret_addr, frame->args);
+#endif
+		base_ptr = frame->next;
+	}
+}
+#endif /* CONFIG_EXCEPTION_STACK_TRACE */
 
 /**
  *
@@ -44,6 +84,8 @@ __weak void _debug_fatal_hook(const NANO_ESF *esf) { ARG_UNUSED(esf); }
 FUNC_NORETURN void _NanoFatalErrorHandler(unsigned int reason,
 					  const NANO_ESF *pEsf)
 {
+	LOG_PANIC();
+
 	_debug_fatal_hook(pEsf);
 
 #ifdef CONFIG_PRINTK
@@ -90,15 +132,21 @@ FUNC_NORETURN void _NanoFatalErrorHandler(unsigned int reason,
 	}
 
 	printk("Current thread ID = %p\n"
-	       "Faulting segment:address = 0x%04x:0x%08x\n"
 	       "eax: 0x%08x, ebx: 0x%08x, ecx: 0x%08x, edx: 0x%08x\n"
 	       "esi: 0x%08x, edi: 0x%08x, ebp: 0x%08x, esp: 0x%08x\n"
-	       "eflags: 0x%x\n",
+	       "eflags: 0x%08x cs: 0x%04x\n"
+#ifdef CONFIG_EXCEPTION_STACK_TRACE
+	       "call trace:\n"
+#endif
+	       "eip: 0x%08x\n",
 	       k_current_get(),
-	       pEsf->cs & 0xFFFF, pEsf->eip,
 	       pEsf->eax, pEsf->ebx, pEsf->ecx, pEsf->edx,
 	       pEsf->esi, pEsf->edi, pEsf->ebp, pEsf->esp,
-	       pEsf->eflags);
+	       pEsf->eflags, pEsf->cs & 0xFFFF, pEsf->eip);
+#ifdef CONFIG_EXCEPTION_STACK_TRACE
+	unwind_stack(pEsf->ebp);
+#endif
+
 #endif /* CONFIG_PRINTK */
 
 
@@ -271,9 +319,27 @@ static void dump_mmu_flags(void *addr)
 }
 #endif
 
-FUNC_NORETURN void page_fault_handler(const NANO_ESF *pEsf)
+#ifdef CONFIG_USERSPACE
+Z_EXC_DECLARE(z_arch_user_string_nlen);
+
+static const struct z_exc_handle exceptions[] = {
+	Z_EXC_HANDLE(z_arch_user_string_nlen)
+};
+#endif
+
+void page_fault_handler(NANO_ESF *pEsf)
 {
 	u32_t err, cr2;
+
+#ifdef CONFIG_USERSPACE
+	for (int i = 0; i < ARRAY_SIZE(exceptions); i++) {
+		if ((void *)pEsf->eip >= exceptions[i].start &&
+		    (void *)pEsf->eip < exceptions[i].end) {
+			pEsf->eip = (unsigned int)(exceptions[i].fixup);
+			return;
+		}
+	}
+#endif
 
 	/* See Section 6.15 of the IA32 Software Developer's Manual vol 3 */
 	__asm__ ("mov %%cr2, %0" : "=r" (cr2));
@@ -291,6 +357,7 @@ FUNC_NORETURN void page_fault_handler(const NANO_ESF *pEsf)
 #endif
 
 	_NanoFatalErrorHandler(_NANO_ERR_CPU_EXCEPTION, pEsf);
+	CODE_UNREACHABLE;
 }
 _EXCEPTION_CONNECT_CODE(page_fault_handler, IV_PAGE_FAULT);
 #endif /* CONFIG_EXCEPTION_DEBUG */
@@ -341,7 +408,7 @@ static FUNC_NORETURN __used void _df_handler_bottom(void)
 	 * one byte, since if a single push operation caused the fault ESP
 	 * wouldn't be decremented
 	 */
-	_x86_mmu_get_flags((void *)_df_esf.esp - 1, &pde_flags, &pte_flags);
+	_x86_mmu_get_flags((u8_t *)_df_esf.esp - 1, &pde_flags, &pte_flags);
 	if (pte_flags & MMU_ENTRY_PRESENT) {
 		printk("***** Double Fault *****\n");
 		reason = _NANO_ERR_CPU_EXCEPTION;

@@ -21,6 +21,7 @@
 #include <toolchain.h>
 #include <linker/sections.h>
 #include <ksched.h>
+#include <kswap.h>
 #include <wait_q.h>
 #include <misc/__assert.h>
 
@@ -40,7 +41,7 @@ void _impl_k_thread_abort(k_tid_t thread)
 
 	if (_current == thread) {
 		if ((SCB->ICSR & SCB_ICSR_VECTACTIVE_Msk) == 0) {
-			_Swap(key);
+			(void)_Swap(key);
 			CODE_UNREACHABLE;
 		} else {
 			SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk;
@@ -48,5 +49,5 @@ void _impl_k_thread_abort(k_tid_t thread)
 	}
 
 	/* The abort handler might have altered the ready queue. */
-	_reschedule_threads(key);
+	_reschedule(key);
 }

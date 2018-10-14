@@ -15,9 +15,10 @@
 #include <toolchain.h>
 #include <kernel_structs.h>
 #include <wait_q.h>
-#ifdef CONFIG_INIT_STACKS
-#include <string.h>
-#endif /* CONFIG_INIT_STACKS */
+
+#ifdef CONFIG_USERSPACE
+extern u8_t *_k_priv_stack_find(void *obj);
+#endif
 
 /**
  *
@@ -58,16 +59,33 @@ void _new_thread(struct k_thread *thread, k_thread_stack_t *stack,
 
 	_ASSERT_VALID_PRIO(priority, pEntry);
 
+#if CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT
+	char *stackEnd = pStackMem + stackSize - MPU_GUARD_ALIGN_AND_SIZE;
+#else
 	char *stackEnd = pStackMem + stackSize;
+#endif
 	struct __esf *pInitCtx;
-	_new_thread_init(thread, pStackMem, stackSize, priority, options);
+
+	_new_thread_init(thread, pStackMem, stackEnd - pStackMem, priority,
+			 options);
 
 	/* carve the thread entry struct from the "base" of the stack */
-
 	pInitCtx = (struct __esf *)(STACK_ROUND_DOWN(stackEnd -
 						     sizeof(struct __esf)));
 
-	pInitCtx->pc = ((u32_t)_thread_entry) & 0xfffffffe;
+#if CONFIG_USERSPACE
+	if (options & K_USER) {
+		pInitCtx->pc = (u32_t)_arch_user_mode_enter;
+	} else {
+		pInitCtx->pc = (u32_t)_thread_entry;
+	}
+#else
+	pInitCtx->pc = (u32_t)_thread_entry;
+#endif
+
+	/* force ARM mode by clearing LSB of address */
+	pInitCtx->pc &= 0xfffffffe;
+
 	pInitCtx->a1 = (u32_t)pEntry;
 	pInitCtx->a2 = (u32_t)parameter1;
 	pInitCtx->a3 = (u32_t)parameter2;
@@ -75,16 +93,14 @@ void _new_thread(struct k_thread *thread, k_thread_stack_t *stack,
 	pInitCtx->xpsr =
 		0x01000000UL; /* clear all, thumb bit is 1, even if RO */
 
-#ifdef CONFIG_THREAD_MONITOR
-	/*
-	 * In debug mode thread->entry give direct access to the thread entry
-	 * and the corresponding parameters.
-	 */
-	thread->entry = (struct __thread_entry *)(pInitCtx);
-#endif
-
 	thread->callee_saved.psp = (u32_t)pInitCtx;
 	thread->arch.basepri = 0;
+
+#if CONFIG_USERSPACE
+	thread->arch.mode = 0;
+	thread->arch.priv_stack_start = 0;
+	thread->arch.priv_stack_size = 0;
+#endif
 
 	/* swap_return_value can contain garbage */
 
@@ -92,6 +108,56 @@ void _new_thread(struct k_thread *thread, k_thread_stack_t *stack,
 	 * initial values in all other registers/thread entries are
 	 * irrelevant.
 	 */
-
-	thread_monitor_init(thread);
 }
+
+#ifdef CONFIG_USERSPACE
+
+FUNC_NORETURN void _arch_user_mode_enter(k_thread_entry_t user_entry,
+	void *p1, void *p2, void *p3)
+{
+
+	/* Set up privileged stack before entering user mode */
+	_current->arch.priv_stack_start =
+		(u32_t)_k_priv_stack_find(_current->stack_obj);
+	_current->arch.priv_stack_size =
+		(u32_t)CONFIG_PRIVILEGED_STACK_SIZE;
+
+	/* FIXME: Need a general API for aligning stacks so that the initial
+	 * user thread stack pointer doesn't overshoot the granularity of MPU
+	 * regions, that works for ARM/NXP/QEMU.
+	 */
+	_current->stack_info.size &= ~0x1f;
+
+	_arm_userspace_enter(user_entry, p1, p2, p3,
+			     (u32_t)_current->stack_info.start,
+			     _current->stack_info.size);
+	CODE_UNREACHABLE;
+}
+
+#endif
+
+#if defined(CONFIG_BUILTIN_STACK_GUARD)
+/*
+ * @brief Configure ARM built-in stack guard
+ *
+ * This function configures per thread stack guards by reprogramming
+ * the built-in Process Stack Pointer Limit Register (PSPLIM).
+ *
+ * @param thread thread info data structure.
+ */
+void configure_builtin_stack_guard(struct k_thread *thread)
+{
+#if defined(CONFIG_USERSPACE)
+	u32_t guard_start = thread->arch.priv_stack_start ?
+			    (u32_t)thread->arch.priv_stack_start :
+			    (u32_t)thread->stack_obj;
+#else
+	u32_t guard_start = thread->stack_info.start;
+#endif
+#if defined(CONFIG_CPU_CORTEX_M_HAS_SPLIM)
+	__set_PSPLIM(guard_start);
+#else
+#error "Built-in PSP limit checks not supported by HW"
+#endif
+}
+#endif /* CONFIG_BUILTIN_STACK_GUARD */

@@ -8,12 +8,12 @@
 
 #include <misc/printk.h>
 
+#include <settings/settings.h>
+
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/mesh.h>
 
 #include "board.h"
-
-#define CID_INTEL 0x0002
 
 static struct bt_mesh_cfg_srv cfg_srv = {
 	.relay = BT_MESH_RELAY_DISABLED,
@@ -38,9 +38,7 @@ static struct bt_mesh_cfg_srv cfg_srv = {
 static struct bt_mesh_health_srv health_srv = {
 };
 
-static struct bt_mesh_model_pub health_pub = {
-	.msg  = BT_MESH_HEALTH_FAULT_MSG(0),
-};
+BT_MESH_HEALTH_PUB_DEFINE(health_pub, 0);
 
 static struct bt_mesh_model_pub gen_level_pub;
 static struct bt_mesh_model_pub gen_onoff_pub;
@@ -137,12 +135,12 @@ static struct bt_mesh_elem elements[] = {
 };
 
 static const struct bt_mesh_comp comp = {
-	.cid = CID_INTEL,
+	.cid = BT_COMP_ID_LF,
 	.elem = elements,
 	.elem_count = ARRAY_SIZE(elements),
 };
 
-static int output_number(bt_mesh_output_action_t action, uint32_t number)
+static int output_number(bt_mesh_output_action_t action, u32_t number)
 {
 	printk("OOB Number: %u\n", number);
 
@@ -189,6 +187,11 @@ static void bt_ready(int err)
 		return;
 	}
 
+	if (IS_ENABLED(CONFIG_SETTINGS)) {
+		settings_load();
+	}
+
+	/* This will be a no-op if settings_load() loaded provisioning info */
 	bt_mesh_prov_enable(BT_MESH_PROV_ADV | BT_MESH_PROV_GATT);
 
 	printk("Mesh initialized\n");

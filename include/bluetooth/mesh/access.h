@@ -7,8 +7,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#ifndef __BT_MESH_ACCESS_H
-#define __BT_MESH_ACCESS_H
+#ifndef ZEPHYR_INCLUDE_BLUETOOTH_MESH_ACCESS_H_
+#define ZEPHYR_INCLUDE_BLUETOOTH_MESH_ACCESS_H_
 
 /**
  * @brief Bluetooth Mesh Access Layer
@@ -130,6 +130,9 @@ struct bt_mesh_msg_ctx {
 	/** Remote address. */
 	u16_t addr;
 
+	/** Destination address of a received message. Not used for sending. */
+	u16_t recv_dst;
+
 	/** Received TTL value. Not used for sending. */
 	u8_t  recv_ttl:7;
 
@@ -194,8 +197,8 @@ struct bt_mesh_model_op {
  *  @brief Encode transmission count & interval steps.
  *
  *  @param count   Number of retransmissions (first transmission is excluded).
- *  @param int_ms  Interval steps in milliseconds. Must be greater than 0
- *                 and a multiple of 10.
+ *  @param int_ms  Interval steps in milliseconds. Must be greater than 0,
+ *                 less than or equal to 320, and a multiple of 10.
  *
  *  @return Mesh transmit value that can be used e.g. for the default
  *          values of the configuration model data.
@@ -256,7 +259,11 @@ struct bt_mesh_model_op {
  */
 #define BT_MESH_PUB_TRANSMIT_INT(transmit) ((((transmit) >> 3) + 1) * 50)
 
-/** Model publication context. */
+/** Model publication context.
+ *
+ *  The context should primarily be created using the
+ *  BT_MESH_MODEL_PUB_DEFINE macro.
+ */
 struct bt_mesh_model_pub {
 	/** The model the context belongs to. Initialized by the stack. */
 	struct bt_mesh_model *mod;
@@ -275,20 +282,10 @@ struct bt_mesh_model_pub {
 
 	/** @brief Publication buffer, containing the publication message.
 	 *
-	 *  The application is expected to initialize this with
-	 *  a valid net_buf_simple pointer, with the help of e.g.
-	 *  the NET_BUF_SIMPLE() macro. The publication buffer must
-	 *  contain a valid publication message before calling the
-	 *  bt_mesh_model_publish() API or after the publication's
-	 *  @ref bt_mesh_model_pub.update callback has been called
-	 *  and returned success. The buffer must be created outside
-	 *  of function context, i.e. it must not be on the stack.
-	 *  This is most conveniently acheived by creating it inline
-	 *  when declaring the publication context:
+	 *  This will get correctly created when the publication context
+	 *  has been defined using the BT_MESH_MODEL_PUB_DEFINE macro.
 	 *
-	 *      static struct bt_mesh_model_pub my_pub = {
-	 *              .msg = NET_BUF_SIMPLE(size),
-	 *      };
+	 *	BT_MESH_MODEL_PUB_DEFINE(name, update, size);
 	 */
 	struct net_buf_simple *msg;
 
@@ -310,6 +307,21 @@ struct bt_mesh_model_pub {
 	struct k_delayed_work timer;
 };
 
+/** @def BT_MESH_MODEL_PUB_DEFINE
+ *
+ *  Define a model publication context.
+ *
+ *  @param _name Variable name given to the context.
+ *  @param _update Optional message update callback (may be NULL).
+ *  @param _msg_len Length of the publication message.
+ */
+#define BT_MESH_MODEL_PUB_DEFINE(_name, _update, _msg_len) \
+	NET_BUF_SIMPLE_DEFINE_STATIC(bt_mesh_pub_msg_##_name, _msg_len); \
+	static struct bt_mesh_model_pub _name = { \
+		.update = _update, \
+		.msg = &bt_mesh_pub_msg_##_name, \
+	}
+
 /** Abstraction that describes a Mesh Model instance */
 struct bt_mesh_model {
 	union {
@@ -320,8 +332,10 @@ struct bt_mesh_model {
 		} vnd;
 	};
 
-	/* The Element this Model belongs to */
-	struct bt_mesh_elem *elem;
+	/* Internal information, mainly for persistent storage */
+	u8_t  elem_idx;   /* Belongs to Nth element */
+	u8_t  mod_idx;    /* Is the Nth model in the element */
+	u16_t flags;      /* Information about what has changed */
 
 	/* Model Publication */
 	struct bt_mesh_model_pub * const pub;
@@ -384,6 +398,15 @@ int bt_mesh_model_send(struct bt_mesh_model *model,
  */
 int bt_mesh_model_publish(struct bt_mesh_model *model);
 
+/**
+ * @brief Get the element that a model belongs to.
+ *
+ * @param mod  Mesh model.
+ *
+ * @return Pointer to the element that the given model belongs to.
+ */
+struct bt_mesh_elem *bt_mesh_model_elem(struct bt_mesh_model *mod);
+
 /** Node Composition */
 struct bt_mesh_comp {
 	u16_t cid;
@@ -398,4 +421,4 @@ struct bt_mesh_comp {
  * @}
  */
 
-#endif /* __BT_MESH_ACCESS_H */
+#endif /* ZEPHYR_INCLUDE_BLUETOOTH_MESH_ACCESS_H_ */

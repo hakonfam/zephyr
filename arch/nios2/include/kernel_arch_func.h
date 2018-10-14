@@ -17,8 +17,8 @@
  * symbols" in the offsets.o module.
  */
 
-#ifndef _kernel_arch_func__h_
-#define _kernel_arch_func__h_
+#ifndef ZEPHYR_ARCH_NIOS2_INCLUDE_KERNEL_ARCH_FUNC_H_
+#define ZEPHYR_ARCH_NIOS2_INCLUDE_KERNEL_ARCH_FUNC_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -60,8 +60,10 @@ void _nios2_icache_flush_all(void);
 
 #if ALT_CPU_DCACHE_SIZE > 0
 void _nios2_dcache_flush_all(void);
+void _nios2_dcache_flush_no_writeback(void *start, u32_t len);
 #else
 #define _nios2_dcache_flush_all() do { } while (0)
+#define _nios2_dcache_flush_no_writeback(x, y) do { } while (0)
 #endif
 
 #endif /* _ASMLANGUAGE */
@@ -70,4 +72,4 @@ void _nios2_dcache_flush_all(void);
 }
 #endif
 
-#endif /* _kernel_arch_func__h_ */
+#endif /* ZEPHYR_ARCH_NIOS2_INCLUDE_KERNEL_ARCH_FUNC_H_ */

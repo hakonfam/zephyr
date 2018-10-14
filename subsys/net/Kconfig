@@ -10,38 +10,37 @@ menu "Networking"
 
 config NET_BUF
 	bool "Network buffer support"
-	default n
 	help
 	  This option enables support for generic network protocol
 	  buffers.
 
+if NET_BUF
+
+config NET_BUF_USER_DATA_SIZE
+	int "Size of user_data available in every network buffer"
+	default 4
+	range 4 65535 if BT
+	range 0 65535
+	help
+	  Amount of memory reserved in each network buffer for user data. In
+	  most cases this can be left as the default value.
+
 config NET_BUF_LOG
 	bool "Network buffer logging"
-	depends on NET_BUF
-	select SYS_LOG
-	default n
+	select LOG
 	help
 	  Enable logs and checks for the generic network buffers.
 
-config SYS_LOG_NET_BUF_LEVEL
-	int
-	prompt "Network buffer Logging level"
-	depends on NET_BUF_LOG && SYS_LOG
-	default 1
-	range 0 4
-	help
-	  Sets log level for network buffers.
-	  Levels are:
-	  0 OFF, do not write
-	  1 ERROR, only write SYS_LOG_ERR
-	  2 WARNING, write SYS_LOG_WRN in addition to previous level
-	  3 INFO, write SYS_LOG_INF in addition to previous levels
-	  4 DEBUG, write SYS_LOG_DBG in addition to previous levels
+if NET_BUF_LOG
+
+module = NET_BUF
+module-dep = LOG
+module-str = Log level for network buffer handling
+module-help = Sets log level for network buffers.
+source "subsys/net/Kconfig.template.log_config.net"
 
 config NET_BUF_WARN_ALLOC_INTERVAL
-	int
-	prompt "Interval of Network buffer allocation warnings"
-	depends on NET_BUF_LOG
+	int "Interval of Network buffer allocation warnings"
 	default 1
 	range 0 60
 	help
@@ -52,34 +51,35 @@ config NET_BUF_WARN_ALLOC_INTERVAL
 
 config NET_BUF_SIMPLE_LOG
 	bool "Network buffer memory debugging"
-	depends on NET_BUF_LOG
-	select SYS_LOG
-	default n
+	select LOG
 	help
 	  Enable extra debug logs and checks for the generic network buffers.
 
+endif # NET_BUF_LOG
+
 config NET_BUF_POOL_USAGE
 	bool "Network buffer pool usage tracking"
-	depends on NET_BUF
-	default n
 	help
 	  Enable network buffer pool tracking. This means that:
 	  * amount of free buffers in the pool is remembered
 	  * total size of the pool is calculated
 	  * pool name is stored and can be shown in debugging prints
 
+endif # NET_BUF
+
 config  NETWORKING
 	bool "Link layer and IP networking support"
 	select NET_BUF
 	select POLL
 	select ENTROPY_GENERATOR
-	default n
 	help
 	  This option enabled generic link layer and IP networking support.
 
 if NETWORKING
 
 source "subsys/net/Kconfig.hostname"
+
+source "subsys/net/l2/Kconfig"
 
 source "subsys/net/ip/Kconfig"
 

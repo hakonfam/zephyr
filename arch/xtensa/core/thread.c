@@ -12,6 +12,7 @@
 #include <kernel_structs.h>
 #include <wait_q.h>
 #include <xtensa_config.h>
+#include <kernel_internal.h>
 
 extern void _xt_user_exit(void);
 
@@ -65,7 +66,8 @@ void _new_thread(struct k_thread *thread, k_thread_stack_t *stack,
 #if XCHAL_CP_NUM > 0
 	/* Ensure CP state descriptor is correctly initialized */
 	cpStack = thread->arch.preempCoprocReg.cpStack; /* short hand alias */
-	memset(cpStack, 0, XT_CP_ASA); /* Set to zero to avoid bad surprises */
+	/* Set to zero to avoid bad surprises */
+	(void)memset(cpStack, 0, XT_CP_ASA);
 	/* Coprocessor's stack is allocated just after the k_thread */
 	cpSA = (u32_t *)(thread->arch.preempCoprocReg.cpStack + XT_CP_ASA);
 	/* Coprocessor's save area alignment is at leat 16 bytes */
@@ -117,17 +119,8 @@ void _new_thread(struct k_thread *thread, k_thread_stack_t *stack,
 #endif
 	thread->callee_saved.topOfStack = pInitCtx;
 	thread->arch.flags = 0;
-#ifdef CONFIG_THREAD_MONITOR
-	/*
-	 * In debug mode thread->entry give direct access to the thread entry
-	 * and the corresponding parameters.
-	 */
-	thread->entry = (struct __thread_entry *)(pInitCtx);
-#endif
 	/* initial values in all other registers/k_thread entries are
 	 * irrelevant
 	 */
-
-	thread_monitor_init(thread);
 }
 

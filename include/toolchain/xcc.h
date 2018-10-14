@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef _XCC_TOOLCHAIN_H_
-#define _XCC_TOOLCHAIN_H_
+#ifndef ZEPHYR_INCLUDE_TOOLCHAIN_XCC_H_
+#define ZEPHYR_INCLUDE_TOOLCHAIN_XCC_H_
 
 #include <toolchain/gcc.h>
 
@@ -35,5 +35,13 @@
 #endif
 
 #endif /* __GCC_LINKER_CMD__ */
+
+#define __builtin_unreachable() __ASSERT(0, "Unreachable code")
+
+/* TODO: XCC doesn't define the below macros which are useful for checking
+ * overflows. This needs to be fixed.
+ */
+#define __builtin_add_overflow(a, b, output)	({ *output = (a) + (b); 0; })
+#define __builtin_mul_overflow(a, b, output)	({ *output = (a) * (b); 0; })
 
 #endif

@@ -4,11 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#if 1
-#define SYS_LOG_DOMAIN "coap-server"
-#define SYS_LOG_LEVEL SYS_LOG_LEVEL_DEBUG
-#define NET_LOG_ENABLED 1
-#endif
+#define LOG_MODULE_NAME net_coap_server
+#define NET_LOG_LEVEL LOG_LEVEL_DBG
 
 #include <errno.h>
 #include <misc/printk.h>
@@ -24,6 +21,8 @@
 
 #include <net/coap.h>
 #include <net/coap_link_format.h>
+
+#include "net_private.h"
 
 #define MY_COAP_PORT 5683
 
@@ -64,24 +63,6 @@ static int obs_counter;
 static struct coap_resource *resource_to_notify;
 
 struct k_delayed_work retransmit_work;
-
-static void strip_headers(struct net_pkt *pkt)
-{
-	/* Get rid of IP + UDP/TCP header if it is there. The IP header
-	 * will be put back just before sending the packet.
-	 */
-	if (net_pkt_appdatalen(pkt) > 0) {
-		int header_len;
-
-		header_len = net_buf_frags_len(pkt->frags) -
-			     net_pkt_appdatalen(pkt);
-		if (header_len > 0) {
-			net_buf_pull(pkt->frags, header_len);
-		}
-	} else {
-		net_pkt_set_appdatalen(pkt, net_buf_frags_len(pkt->frags));
-	}
-}
 
 static void get_from_ip_addr(struct coap_packet *cpkt,
 			     struct sockaddr_in6 *from)
@@ -129,6 +110,18 @@ static int well_known_core_get(struct coap_resource *resource,
 	}
 
 	return r;
+}
+
+static void payload_dump(const char *s, struct net_buf *frag,
+			 u16_t offset, u16_t len)
+{
+	printk("payload message = %s [%u]\n", s, len);
+
+	while (frag) {
+		net_hexdump("", frag->data + offset, frag->len - offset);
+		frag = frag->frags;
+		offset = 0;
+	}
 }
 
 static int test_del(struct coap_resource *resource,
@@ -189,6 +182,11 @@ static int test_put(struct coap_resource *resource,
 	u16_t id;
 	int r;
 
+	struct net_buf *payloadfrag;
+
+	u16_t offset;
+	u16_t len;
+
 	/* TODO: Check for payload, empty payload is an error case. */
 
 	get_from_ip_addr(request, &from);
@@ -197,10 +195,24 @@ static int test_put(struct coap_resource *resource,
 	id = coap_header_get_id(request);
 	tkl = coap_header_get_token(request, token);
 
+	NET_INFO("\n ****** test put method  *******\n");
+
 	NET_INFO("*******\n");
 	NET_INFO("type: %u code %u id %u\n", type, code, id);
 	NET_INFO("*******\n");
 
+	payloadfrag = coap_packet_get_payload(request, &offset, &len);
+	if (!payloadfrag && len == 0xffff) {
+		NET_ERR("Invalid payload");
+		return -EINVAL;
+	} else if (!payloadfrag && !len) {
+		NET_INFO("Packet without payload\n");
+		goto next;
+	}
+
+	payload_dump("put_payload", payloadfrag, offset, len);
+
+next:
 	pkt = net_pkt_get_tx(context, K_FOREVER);
 	frag = net_pkt_get_data(context, K_FOREVER);
 
@@ -242,6 +254,11 @@ static int test_post(struct coap_resource *resource,
 	u16_t id;
 	int r;
 
+	struct net_buf *payloadfrag;
+
+	u16_t offset;
+	u16_t len;
+
 	/* TODO: Check for payload, empty payload is an error case. */
 
 	get_from_ip_addr(request, &from);
@@ -250,10 +267,23 @@ static int test_post(struct coap_resource *resource,
 	id = coap_header_get_id(request);
 	tkl = coap_header_get_token(request, token);
 
+	NET_INFO("\n ****** test post method  *******\n");
 	NET_INFO("*******\n");
 	NET_INFO("type: %u code %u id %u\n", type, code, id);
 	NET_INFO("*******\n");
 
+	payloadfrag = coap_packet_get_payload(request, &offset, &len);
+	if (!payloadfrag && len == 0xffff) {
+		NET_ERR("Invalid payload");
+		return -EINVAL;
+	} else if (!payloadfrag && !len) {
+		NET_INFO("Packet without payload\n");
+		goto next;
+	}
+
+	payload_dump("post_payload", payloadfrag, offset, len);
+
+next:
 	pkt = net_pkt_get_tx(context, K_FOREVER);
 	frag = net_pkt_get_data(context, K_FOREVER);
 
@@ -464,7 +494,7 @@ static int query_get(struct coap_resource *resource,
 		memcpy(str, options[i].value, options[i].len);
 		str[options[i].len] = '\0';
 
-		NET_INFO("query[%d]: %s\n", i + 1, str);
+		NET_INFO("query[%d]: %s\n", i + 1, log_strdup(str));
 	}
 
 	NET_INFO("*******\n");
@@ -631,9 +661,6 @@ done:
 		k_delayed_work_submit(&retransmit_work, pending->timeout);
 	}
 
-	/* setup appdatalen */
-	strip_headers(pkt);
-
 	return net_context_sendto(pkt, (const struct sockaddr *)&from,
 				  sizeof(struct sockaddr_in6),
 				  NULL, 0, NULL, NULL);
@@ -707,7 +734,7 @@ static int large_get(struct coap_resource *resource,
 	size = min(coap_block_size_to_bytes(ctx.block_size),
 		   ctx.total_size - ctx.current);
 
-	memset(payload, 'A', size);
+	(void)memset(payload, 'A', min(size, sizeof(payload)));
 
 	r = coap_packet_append_payload(&response, (u8_t *)payload, size);
 	if (r < 0) {
@@ -718,7 +745,7 @@ static int large_get(struct coap_resource *resource,
 	r = coap_next_block(&response, &ctx);
 	if (!r) {
 		/* Will return 0 when it's the last block. */
-		memset(&ctx, 0, sizeof(ctx));
+		(void)memset(&ctx, 0, sizeof(ctx));
 	}
 
 	return net_context_sendto(pkt, (const struct sockaddr *)&from,
@@ -780,7 +807,7 @@ static int large_update_put(struct coap_resource *resource,
 	}
 
 	NET_INFO("**************\n");
-	NET_INFO("[ctx] current %u block_size %u total_size %u\n",
+	NET_INFO("[ctx] current %zu block_size %u total_size %zu\n",
 		 ctx.current, coap_block_size_to_bytes(ctx.block_size),
 		 ctx.total_size);
 	NET_INFO("**************\n");
@@ -994,9 +1021,6 @@ static int send_notification_packet(const struct sockaddr *addr, u16_t age,
 
 		k_delayed_work_submit(&retransmit_work, pending->timeout);
 	}
-
-	/* setup appdatalen */
-	strip_headers(pkt);
 
 	return net_context_sendto(pkt, addr, addrlen, NULL, 0, NULL, NULL);
 }
@@ -1225,9 +1249,8 @@ static void udp_receive(struct net_context *context,
 	get_from_ip_addr(&request, &from);
 	pending = coap_pending_received(&request, pendings,
 					NUM_PENDINGS);
-	if (pending) {
-		net_pkt_unref(pkt);
-		return;
+	if (!pending) {
+		goto not_found;
 	}
 
 	if (coap_header_get_type(&request) == COAP_TYPE_RESET) {
@@ -1237,16 +1260,21 @@ static void udp_receive(struct net_context *context,
 		o = coap_find_observer_by_addr(observers, NUM_OBSERVERS,
 					       (struct sockaddr *)&from);
 		if (!o) {
+			NET_ERR("Observer not found\n");
 			goto not_found;
 		}
 
 		r = find_resouce_by_observer(resources, o);
 		if (!r) {
+			NET_ERR("Observer found but Resource not found\n");
 			goto not_found;
 		}
 
 		coap_remove_observer(r, o);
 	}
+
+	net_pkt_unref(pkt);
+	return;
 
 not_found:
 	r = coap_handle_request(&request, resources, options, opt_num);
@@ -1274,12 +1302,12 @@ static bool join_coap_multicast_group(void)
 		return false;
 	}
 
-#if defined(CONFIG_NET_APP_SETTINGS)
+#if defined(CONFIG_NET_CONFIG_SETTINGS)
 	if (net_addr_pton(AF_INET6,
-			  CONFIG_NET_APP_MY_IPV6_ADDR,
+			  CONFIG_NET_CONFIG_MY_IPV6_ADDR,
 			  &my_addr) < 0) {
 		NET_ERR("Invalid IPv6 address %s",
-			CONFIG_NET_APP_MY_IPV6_ADDR);
+			CONFIG_NET_CONFIG_MY_IPV6_ADDR);
 	}
 #endif
 
@@ -1312,8 +1340,6 @@ static void retransmit_request(struct k_work *work)
 
 	/* ref to avoid being freed by sendto() */
 	net_pkt_ref(pending->pkt);
-	/* drop IP + UDP headers */
-	strip_headers(pending->pkt);
 
 	r = net_context_sendto(pending->pkt, &pending->addr,
 			       sizeof(struct sockaddr_in6),

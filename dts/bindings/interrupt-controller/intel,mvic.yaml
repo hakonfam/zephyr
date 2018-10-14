@@ -12,6 +12,7 @@ properties:
       type: string
       description: compatible strings
       constraint: "intel,mvic"
+      generation: define
 
   reg:
       category: required
@@ -24,8 +25,6 @@ properties:
       type: int
       description: number of bits of IRQ priorities
       generation: define
-
-cell_string: IRQ
 
 "#cells":
   - irq

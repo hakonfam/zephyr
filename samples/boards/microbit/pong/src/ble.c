@@ -24,8 +24,6 @@
 #define SCAN_TIMEOUT     K_SECONDS(2)
 
 #define APPEARANCE       0
-#define DEVICE_NAME      CONFIG_BT_DEVICE_NAME
-#define DEVICE_NAME_LEN  (sizeof(DEVICE_NAME) - 1)
 
 #define PONG_SVC_UUID	0x90, 0x6c, 0x55, 0x0f, 0xee, 0x6f, 0x4d, 0x0d, \
 			0xa1, 0x7e, 0x24, 0x4e, 0x38, 0xea, 0x4f, 0xf9
@@ -34,7 +32,7 @@
 
 static struct bt_uuid_128 pong_svc_uuid = BT_UUID_INIT_128(PONG_SVC_UUID);
 static struct bt_uuid_128 pong_chr_uuid = BT_UUID_INIT_128(PONG_CHR_UUID);
-static struct bt_uuid_16 gatt_ccc_uuid = BT_UUID_INIT_16(BT_UUID_GATT_CCC_VAL);
+static struct bt_uuid *gatt_ccc_uuid = BT_UUID_GATT_CCC;
 
 static struct bt_gatt_discover_params discov_param;
 static struct bt_gatt_subscribe_params subscribe_param;
@@ -42,10 +40,6 @@ static struct bt_gatt_subscribe_params subscribe_param;
 static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
 	BT_DATA_BYTES(BT_DATA_UUID128_ALL, PONG_SVC_UUID),
-};
-
-static const struct bt_data sd[] = {
-	BT_DATA(BT_DATA_NAME_COMPLETE, DEVICE_NAME, DEVICE_NAME_LEN),
 };
 
 static struct bt_conn *default_conn;
@@ -177,7 +171,7 @@ static u8_t discover_func(struct bt_conn *conn,
 
 	if (!attr) {
 		printk("Discover complete\n");
-		memset(&discov_param, 0, sizeof(discov_param));
+		(void)memset(&discov_param, 0, sizeof(discov_param));
 		return BT_GATT_ITER_STOP;
 	}
 
@@ -195,7 +189,7 @@ static u8_t discover_func(struct bt_conn *conn,
 		}
 	} else if (param->uuid == &pong_chr_uuid.uuid) {
 		printk("Pong characteristic discovered\n");
-		discov_param.uuid = &gatt_ccc_uuid.uuid;
+		discov_param.uuid = gatt_ccc_uuid;
 		discov_param.start_handle = attr->handle + 2;
 		discov_param.type = BT_GATT_DISCOVER_DESCRIPTOR;
 		subscribe_param.value_handle = attr->handle + 1;
@@ -468,8 +462,8 @@ static void ble_timeout(struct k_work *work)
 		k_delayed_work_submit(&ble_work, K_NO_WAIT);
 		break;
 	case BLE_ADV_START:
-		err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad),
-				      sd, ARRAY_SIZE(sd));
+		err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad),
+				      NULL, 0);
 		if (err) {
 			printk("Advertising failed to start (err %d)\n", err);
 			return;
@@ -519,9 +513,8 @@ static void pong_ccc_cfg_changed(const struct bt_gatt_attr *attr, u16_t val)
 static struct bt_gatt_attr pong_attrs[] = {
 	/* Vendor Primary Service Declaration */
 	BT_GATT_PRIMARY_SERVICE(&pong_svc_uuid.uuid),
-	BT_GATT_CHARACTERISTIC(&pong_chr_uuid.uuid, BT_GATT_CHRC_NOTIFY),
-	BT_GATT_DESCRIPTOR(&pong_chr_uuid.uuid, BT_GATT_PERM_NONE,
-			   NULL, NULL, NULL),
+	BT_GATT_CHARACTERISTIC(&pong_chr_uuid.uuid, BT_GATT_CHRC_NOTIFY,
+			       BT_GATT_PERM_NONE, NULL, NULL, NULL),
 	BT_GATT_CCC(pong_ccc_cfg, pong_ccc_cfg_changed),
 };
 
@@ -542,6 +535,6 @@ void ble_init(void)
 	bt_conn_cb_register(&conn_callbacks);
 
 
-	local_attr = &pong_attrs[2];
+	local_attr = &pong_attrs[1];
 	bt_gatt_service_register(&pong_svc);
 }
