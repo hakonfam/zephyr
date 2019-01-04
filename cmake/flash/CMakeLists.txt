@@ -29,7 +29,7 @@ if(RUNNERS)
     CACHE STRING "Board definition directory" FORCE)
   set(ZEPHYR_RUNNER_CONFIG_KERNEL_ELF "${PROJECT_BINARY_DIR}/${KERNEL_ELF_NAME}"
     CACHE STRING "Path to kernel image in ELF format" FORCE)
-  get_property(HEX_FILES_TO_MERGE GLOBAL PROPERTY HEX_FILES_TO_MERGE)
+  get_property(HEX_FILES_TO_MERGE GLOBAL PROPERTY ${IMAGE}HEX_FILES_TO_MERGE)
   if(HEX_FILES_TO_MERGE)
     set(ZEPHYR_RUNNER_CONFIG_KERNEL_HEX "${PROJECT_BINARY_DIR}/${MERGED_HEX_NAME}"
       CACHE STRING "Path to merged image in Intel Hex format" FORCE)
@@ -91,7 +91,7 @@ foreach(target flash debug debugserver attach)
     set(comment "Debugging ${BOARD}")
   endif()
 
-  list(APPEND FLASH_DEPS ${logical_target_for_zephyr_elf})
+  list(APPEND ${IMAGE}FLASH_DEPS ${logical_target_for_zephyr_elf})
 
   # We pass --skip-rebuild here because the DEPENDS value ensures the
   # build is already up to date before west is run.
@@ -103,7 +103,7 @@ foreach(target flash debug debugserver attach)
     ${RUNNER_VERBOSE}
     ${target}
     --skip-rebuild
-    DEPENDS ${FLASH_DEPS}
+    DEPENDS ${${IMAGE}FLASH_DEPS}
     WORKING_DIRECTORY ${APPLICATION_BINARY_DIR}
     )
 

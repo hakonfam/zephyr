@@ -1360,17 +1360,17 @@ add_custom_command(
 )
 
 # To populate with hex files to merge, do the following:
-#  set_property(GLOBAL APPEND PROPERTY HEX_FILES_TO_MERGE ${my_local_list})
+#  set_property(GLOBAL APPEND PROPERTY ${IMAGE}HEX_FILES_TO_MERGE ${my_local_list})
 # Note that the zephyr.hex file will not be included automatically.
 get_property(
   HEX_FILES_TO_MERGE
   GLOBAL PROPERTY
-  HEX_FILES_TO_MERGE
+  ${IMAGE}HEX_FILES_TO_MERGE
   )
 get_property(
   HEX_FILES_TO_MERGE_TARGET
   GLOBAL PROPERTY
-  HEX_FILES_TO_MERGE_TARGET
+  ${IMAGE}HEX_FILES_TO_MERGE_TARGET
   )
 
 if(HEX_FILES_TO_MERGE)
@@ -1390,7 +1390,7 @@ if(HEX_FILES_TO_MERGE)
     )
 
   add_custom_target(${IMAGE}mergehex ALL DEPENDS ${MERGED_HEX_NAME})
-  list(APPEND FLASH_DEPS ${IMAGE}mergehex)
+  list(APPEND ${IMAGE}FLASH_DEPS ${IMAGE}mergehex)
 endif()
 
 if(CONFIG_OUTPUT_PRINT_MEMORY_USAGE)
