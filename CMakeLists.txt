@@ -438,7 +438,7 @@ function(construct_add_custom_command_for_linker_pass linker_output_name output_
   endif()
 
   zephyr_get_include_directories_for_lang(C current_includes)
-  get_filename_component(base_name ${CMAKE_CURRENT_BINARY_DIR} NAME)
+  file(RELATIVE_PATH base_name "${CMAKE_BINARY_DIR}" "${PROJECT_BINARY_DIR}")
   get_property(current_defines GLOBAL PROPERTY PROPERTY_LINKER_SCRIPT_DEFINES)
 
   set(${output_variable}
