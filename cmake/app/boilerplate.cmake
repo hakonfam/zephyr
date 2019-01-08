@@ -395,8 +395,6 @@ set_property(TARGET ${IMAGE}app PROPERTY ARCHIVE_OUTPUT_DIRECTORY ${IMAGE}app)
 
 add_subdirectory(${ZEPHYR_BASE} ${__build_dir})
 
-#TODO: Everything below here.
-
 # Link 'app' with the Zephyr interface libraries.
 #
 # NB: This must be done in boilerplate.cmake because 'app' can only be
@@ -410,8 +408,26 @@ foreach(boilerplate_lib ${ZEPHYR_INTERFACE_LIBS_PROPERTY})
   # properties of 'boilerplate_lib'. The most common property is 'include
   # directories', but it is also possible to have defines and compiler
   # flags in the interface of a library.
-  #
-  string(TOUPPER ${boilerplate_lib} boilerplate_lib_upper_case) # Support lowercase lib names
+
+  # 'boilerplate_lib' is formatted as '0_mbedtls' (for instance). But
+  # the Kconfig options are formatted as
+  # 'CONFIG_APP_LINK_WITH_MBEDTLS'. So we need to strip the '0_' and
+  # convert to upper case.
+
+  # Match the non-image'ified library name. E.g. '1_mylib' -> 'mylib'.
+  set(image_regex "^${IMAGE}(.*)")
+  string(REGEX MATCH
+	${image_regex}
+	unused_out_var
+	${boilerplate_lib}
+	)
+  if(CMAKE_MATCH_1)
+	set(boilerplate_lib_without_image ${CMAKE_MATCH_1})
+  else()
+	message(FATAL_ERROR "Internal error. Expected '${boilerplate_lib}' to match '${image_regex}'")
+  endif()
+
+  string(TOUPPER ${boilerplate_lib_without_image} boilerplate_lib_upper_case) # Support lowercase lib names
   target_link_libraries_ifdef(
     CONFIG_APP_LINK_WITH_${boilerplate_lib_upper_case}
     ${IMAGE}app
