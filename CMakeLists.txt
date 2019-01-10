@@ -1418,6 +1418,7 @@ list(APPEND
   ${extra_post_build_commands}
   )
 
+
 add_custom_command(
   TARGET ${logical_target_for_zephyr_elf}
   POST_BUILD
