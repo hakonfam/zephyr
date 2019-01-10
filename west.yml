@@ -25,6 +25,8 @@ manifest:
   remotes:
     - name: upstream
       url-base: https://github.com/zephyrproject-rtos
+    - name: mcuboot
+      url-base: https://github.com/JuulLabs-OSS
 
   # The initial list of external projects is just Zephyr's net-tools
   # repository, which is useful for running the Zephyr networking
@@ -35,6 +37,9 @@ manifest:
   projects:
     - name: net-tools
       revision: 30b7efa827b04d2e47840716b0372737fe7d6c92
+    - name: mcuboot
+      remote: mcuboot
+      revision: pull/430/head # TODO: Change to SHA after 430 is merged
 
   self:
     path: zephyr
