@@ -30,6 +30,14 @@ assert(toolchain_is_ok "The toolchain is unable to build a dummy C file. See CMa
 set(CMAKE_EXECUTABLE_SUFFIX .elf)
 set(ZEPHYR_PREBUILT_EXECUTABLE zephyr_prebuilt)
 
+set(OFFSETS_H_TARGET           offsets_h)
+set(SYSCALL_MACROS_H_TARGET    syscall_macros_h_target)
+set(SYSCALL_LIST_H_TARGET      syscall_list_h_target)
+set(DRIVER_VALIDATION_H_TARGET driver_validation_h_target)
+set(KOBJ_TYPES_H_TARGET        kobj_types_h_target)
+set(LINKER_SCRIPT_TARGET       linker_script_target)
+
+
 if(NOT PROPERTY_LINKER_SCRIPT_DEFINES)
   set_property(GLOBAL PROPERTY PROPERTY_LINKER_SCRIPT_DEFINES -D__GCC_LINKER_CMD__)
 endif()
@@ -500,7 +508,6 @@ add_subdirectory(drivers)
 add_subdirectory(tests)
 
 set(syscall_macros_h ${ZEPHYR_BINARY_DIR}/include/generated/syscall_macros.h)
-set(SYSCALL_MACROS_H_TARGET syscall_macros_h_target)
 
 add_custom_target(${SYSCALL_MACROS_H_TARGET} DEPENDS ${syscall_macros_h})
 add_custom_command(                       OUTPUT  ${syscall_macros_h}
@@ -605,7 +612,6 @@ add_custom_command(
   DEPENDS ${syscalls_subdirs_trigger} ${PARSE_SYSCALLS_HEADER_DEPENDS}
   )
 
-set(SYSCALL_LIST_H_TARGET syscall_list_h_target)
 add_custom_target(${SYSCALL_LIST_H_TARGET} DEPENDS             ${syscall_list_h})
 add_custom_command(OUTPUT include/generated/syscall_dispatch.c ${syscall_list_h}
   # Also, some files are written to include/generated/syscalls/
@@ -630,10 +636,8 @@ add_custom_command(
   $<$<BOOL:${CMAKE_VERBOSE_MAKEFILE}>:--verbose>
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
-set(DRIVER_VALIDATION_H_TARGET driver_validation_h_target)
 add_custom_target(${DRIVER_VALIDATION_H_TARGET} DEPENDS ${DRV_VALIDATION})
 
-set(KOBJ_TYPES_H_TARGET kobj_types_h_target)
 include($ENV{ZEPHYR_BASE}/cmake/kobj.cmake)
 gen_kobj(KOBJ_INCLUDE_PATH)
 
@@ -662,7 +666,6 @@ add_custom_command(
   -o ${OFFSETS_H_PATH}
   DEPENDS ${OFFSETS_LIB}
 )
-set(OFFSETS_H_TARGET offsets_h)
 add_custom_target(${OFFSETS_H_TARGET} DEPENDS ${OFFSETS_H_PATH})
 
 zephyr_include_directories(${TOOLCHAIN_INCLUDES})
@@ -803,7 +806,6 @@ add_custom_command(
   ${custom_command}
 )
 
-set(LINKER_SCRIPT_TARGET linker_script_target)
 add_custom_target(
   ${LINKER_SCRIPT_TARGET}
   DEPENDS
