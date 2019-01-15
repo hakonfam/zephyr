@@ -20,6 +20,7 @@ endif()
 
 add_executable(testbinary ${SOURCES})
 
+set(KOBJ_TYPES_H_TARGET kobj_types_h_target)
 include($ENV{ZEPHYR_BASE}/cmake/kobj.cmake)
 add_dependencies(testbinary ${KOBJ_TYPES_H_TARGET})
 gen_kobj(KOBJ_GEN_DIR)
