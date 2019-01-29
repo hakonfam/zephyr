@@ -104,6 +104,28 @@ function(zephyr_cc_option)
   endforeach()
 endfunction()
 
+# Add new executable which is built using a separate configuration.  This is
+# needed when a component needs to be built as an independent hex file, or with
+# different configuration.  Examples of use include bootloaders, and
+# secure/non-secure partitions in a TrustZone environment.
+#
+# This function creates a new “app” context, equivalent to the one defined by
+# the ‘origin’ context.  The CMakeLists.txt file pointed to by the users
+# 'cmake' command defines the 'origin' context.  All targets defined by the new
+# context is prefixed with the name provided in the `image_name` argument.  As
+# a result of this, in order to execute the `menuconfig` target to perform
+# configuration `image_name_menuconfig` must be used instead.  Note the targets
+# defined by the ‘origin’ context is not prefixed in any way.
+#
+# Only a small set of configurations is shared between the ‘origin’ context and
+# the new context, notably CMake properties.  The new context defines its own
+# set of: - CMake variables (note: not properties) - DTS configuration -
+# KConfig configuration
+#
+# When multiple contexts are defined, a new merge target is defined which
+# merges the resulting hex files. The 'flash' target is updated to use this
+# merged hex file instead of the 'zephyr.hex' file from the origin context.
+#
 function(zephyr_add_multi_image image_name)
   set_property(GLOBAL PROPERTY IMAGE ${image_name}_)
 endfunction()
