@@ -548,7 +548,7 @@ endif()
 add_subdirectory(boards)
 add_subdirectory(ext)
 add_subdirectory(subsys)
-add_subdirectory(drivers)
+add_subdirectory_ifdef(CONFIG_KERNEL drivers)
 add_subdirectory(tests)
 
 set(syscall_macros_h ${ZEPHYR_BINARY_DIR}/include/generated/syscall_macros.h)
