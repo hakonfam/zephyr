@@ -125,14 +125,6 @@ include(CheckCXXCompilerFlag)
 include(${ZEPHYR_BASE}/cmake/extensions.cmake)
 include(${ZEPHYR_BASE}/cmake/version.cmake)  # depends on hex.cmake
 
-#
-# Find tools
-#
-
-include(${ZEPHYR_BASE}/cmake/python.cmake)
-include(${ZEPHYR_BASE}/cmake/git.cmake)  # depends on version.cmake
-include(${ZEPHYR_BASE}/cmake/ccache.cmake)
-
 if(${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
   message(FATAL_ERROR "Source directory equals build directory.\
  In-source builds are not supported.\
@@ -140,6 +132,14 @@ if(${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
 if(FIRST_BOILERPLATE_EXECUTION)
+  #
+  # Find tools
+  #
+
+  include(${ZEPHYR_BASE}/cmake/python.cmake)
+  include(${ZEPHYR_BASE}/cmake/git.cmake)  # depends on version.cmake
+  include(${ZEPHYR_BASE}/cmake/ccache.cmake)
+
   add_custom_target(
     pristine
     COMMAND ${CMAKE_COMMAND} -P ${ZEPHYR_BASE}/cmake/pristine.cmake
