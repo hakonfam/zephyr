@@ -1,6 +1,4 @@
 
-set_property (GLOBAL PROPERTY "PROJECT_LIB_EXTRA_CFLAGS")
-
 collector_create (PROJECT_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}")
 collect (PROJECT_LIB_DIRS "${CMAKE_CURRENT_BINARY_DIR}")
 collect (PROJECT_INC_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/include")
@@ -25,11 +23,7 @@ include_directories (${_include})
 
 collector_list (_deps PROJECT_LIB_DEPS)
 
-get_property (_ecflags GLOBAL PROPERTY "PROJECT_LIB_EXTRA_CFLAGS")
-
 collector_list (_sources PROJECT_LIB_SOURCES)
-set_property (SOURCE ${_sources}
-  APPEND_STRING PROPERTY COMPILE_FLAGS " ${_ecflags}")
 
 # Build a shared library if so configured.
 if (WITH_ZEPHYR)
