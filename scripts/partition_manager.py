@@ -10,6 +10,11 @@ import re
 from os import path
 
 
+class AlignmentError(RuntimeError):
+    def __init__(self, message):
+        super().__init__(message)
+
+
 def remove_item_not_in_list(list_to_remove_from, list_to_check):
     for x in list_to_remove_from:
         if x not in list_to_check and x != 'app':
@@ -112,6 +117,13 @@ def load_adr_map(adr_map, input_files, output_file_name, app_override_file):
     adr_map['app']['out_path'] = app_override_file
 
 
+def check_alignments(reqs):
+    for image_name, vals in reqs.items():
+        if 'align' in vals.keys() and vals['address'] % vals['align'] != 0:
+            raise AlignmentError("Address of {}  (0x{:x}) does not meet alignment requirement of {:x}".
+                                 format(image_name, vals['address'], vals['align']))
+
+
 def set_addresses(reqs, solution, flash_size):
     # First image starts at 0
     reqs[solution[0]]['address'] = 0
@@ -130,6 +142,8 @@ def set_addresses(reqs, solution, flash_size):
         reqs['app']['size'] = reqs[solution[solution.index('app') + 1]]['address'] - reqs['app']['address']
     else:
         reqs['app']['size'] = flash_size - reqs['app']['address']
+
+    check_alignments(reqs)
 
 
 def write_override_files(adr_map):
@@ -206,22 +220,6 @@ def parse_args():
     return args
 
 
-def main():
-    args = parse_args()
-
-    if args.input is not None:
-        adr_map = generate_override(args.input, args.override, args.flash_size, args.configs, args.app_override_file)
-        write_override_files(adr_map)
-        write_pm_config(adr_map, args.pm_config_file_name)
-    else:
-        print("No input, running tests.")
-        test()
-
-
-if __name__ == "__main__":
-    main()
-
-
 def test():
     td = {
         'e': {'placement': {'before': ['app']}, 'size': 100},
@@ -237,14 +235,29 @@ def test():
         'app': {'placement': ''}}
     s = resolve(td)
     set_addresses(td, s, 1000)
+    assert s == ['a', 'b', 'c', 'd', 'e', 'app', 'f', 'g', 'h', 'i', 'j']
+    assert td['a']['address'] == 0
+    assert td['j']['address'] == 980
 
     td = {'mcuboot': {'placement': {'before': ['app', 'spu']}, 'size': 200},
           'b0': {'placement': {'before': ['mcuboot', 'app']}, 'size': 100},
-          'app': {'placement': ''}}
+          'app': {'placement': '', 'align': 100}}
     s = resolve(td)
     set_addresses(td, s, 1000)
+    assert s == ['b0', 'mcuboot', 'app']
+    assert td['b0']['address'] == 0
+    assert td['app']['address'] == 300
 
-    td = {'b0': {'placement': {'before': ['mcuboot', 'app']}, 'size': 100}, 'app': {'placement': ''}}
+    failed = False
+    try:
+        td = {'b0': {'placement': {'before': ['mcuboot', 'app']}, 'size': 100}, 'app': {'placement': '', 'align': 7}}
+        s = resolve(td)
+        set_addresses(td, s, 1000)
+    except AlignmentError:
+        failed = True
+    assert failed
+
+    td = {'b0': {'placement': {'before': ['mcuboot', 'app']}, 'size': 100}, 'app': {'placement': '', 'align': 100}}
     s = resolve(td)
     set_addresses(td, s, 1000)
 
@@ -261,4 +274,20 @@ def test():
           'app': {'placement': ''}}
     s = resolve(td)
     set_addresses(td, s, 1000)
-    pass
+    print("Pass")
+
+
+def main():
+    args = parse_args()
+
+    if args.input is not None:
+        adr_map = generate_override(args.input, args.override, args.flash_size, args.configs, args.app_override_file)
+        write_override_files(adr_map)
+        write_pm_config(adr_map, args.pm_config_file_name)
+    else:
+        print("No input, running tests.")
+        test()
+
+
+if __name__ == "__main__":
+    main()
