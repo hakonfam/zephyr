@@ -517,9 +517,9 @@ foreach(path
   endif()
 endforeach()
 
-set_ifndef(  DTS_BOARD_FIXUP_FILE                                   ${BOARD_DIR}/dts_fixup.h)
-set_ifndef(    DTS_SOC_FIXUP_FILE                 ${SOC_DIR}/${ARCH}/${SOC_PATH}/dts_fixup.h)
-set(           DTS_APP_FIXUP_FILE                      ${APPLICATION_SOURCE_DIR}/dts_fixup.h)
+set_ifndef(${IMAGE}DTS_BOARD_FIXUP_FILE ${BOARD_DIR}/dts_fixup.h)
+set_ifndef(${IMAGE}DTS_SOC_FIXUP_FILE   ${SOC_DIR}/${ARCH}/${SOC_PATH}/dts_fixup.h)
+set(               DTS_APP_FIXUP_FILE   ${APPLICATION_SOURCE_DIR}/dts_fixup.h)
 
 set_ifndef(${IMAGE}DTS_CAT_OF_FIXUP_FILES ${ZEPHYR_BINARY_DIR}/include/generated/generated_dts_board_fixups.h)
 
