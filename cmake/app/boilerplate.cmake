@@ -146,6 +146,10 @@ if(FIRST_BOILERPLATE_EXECUTION)
     # Equivalent to rm -rf build/*
   )
 
+  # 'BOARD_ROOT' is a prioritized list of directories where boards may
+  # be found. It always includes ${ZEPHYR_BASE} at the lowest priority.
+  list(APPEND BOARD_ROOT ${ZEPHYR_BASE})
+
   # The BOARD can be set by 3 sources. Through environment variables,
   # through the cmake CLI, and through CMakeLists.txt.
   #
@@ -191,7 +195,6 @@ if(FIRST_BOILERPLATE_EXECUTION)
       endif()
     endif()
 
-
     set(BOARD ${CACHED_BOARD})
   elseif(board_cli_argument)
     set(BOARD ${board_cli_argument})
@@ -211,33 +214,6 @@ if(FIRST_BOILERPLATE_EXECUTION)
 
   # Store the selected board in the cache
   set(CACHED_BOARD ${BOARD} CACHE STRING "Selected board")
-
-  # 'BOARD_ROOT' is a prioritized list of directories where boards may
-  # be found. It always includes ${ZEPHYR_BASE} at the lowest priority.
-  list(APPEND BOARD_ROOT ${ZEPHYR_BASE})
-
-  # Use BOARD to search for a '_defconfig' file.
-  # e.g. zephyr/boards/arm/96b_carbon_nrf51/96b_carbon_nrf51_defconfig.
-  # When found, use that path to infer the ARCH we are building for.
-  foreach(root ${BOARD_ROOT})
-    # NB: find_path will return immediately if the output variable is
-    # already set
-    find_path(BOARD_DIR
-      NAMES ${BOARD}_defconfig
-      PATHS ${root}/boards/*/*
-      NO_DEFAULT_PATH
-      )
-    if(BOARD_DIR AND NOT (${root} STREQUAL ${ZEPHYR_BASE}))
-      set(USING_OUT_OF_TREE_BOARD 1)
-    endif()
-  endforeach()
-
-  if(NOT BOARD_DIR)
-    message("No board named '${BOARD}' found")
-    print_usage()
-    unset(CACHED_BOARD CACHE)
-    message(FATAL_ERROR "Invalid usage")
-  endif()
 
   # The SHIELD can be set by 3 sources. Through environment variables,
   # through the cmake CLI, and through CMakeLists.txt.
@@ -361,15 +337,24 @@ if(FIRST_BOILERPLATE_EXECUTION)
 	message(FATAL_ERROR "Invalid usage")
   endif()
 
-  get_filename_component(BOARD_ARCH_DIR ${BOARD_DIR}      DIRECTORY)
-  get_filename_component(BOARD_FAMILY   ${BOARD_DIR}      NAME)
-  get_filename_component(ARCH           ${BOARD_ARCH_DIR} NAME)
-
   # Prevent CMake from testing the toolchain
   set(CMAKE_C_COMPILER_FORCED   1)
   set(CMAKE_CXX_COMPILER_FORCED 1)
 
   include(${ZEPHYR_BASE}/cmake/host-tools.cmake)
+
+  string(REPLACE ";" " " BOARD_ROOT_SPACE_SEPARATED "${BOARD_ROOT}")
+  string(REPLACE ";" " " SHIELD_LIST_SPACE_SEPARATED "${SHIELD_LIST}")
+
+  # NB: The reason it is 'usage' and not help is that CMake already
+  # defines a target 'help'
+  add_custom_target(
+    usage
+    ${CMAKE_COMMAND}
+    -DBOARD_ROOT_SPACE_SEPARATED=${BOARD_ROOT_SPACE_SEPARATED}
+    -DSHIELD_LIST_SPACE_SEPARATED=${SHIELD_LIST_SPACE_SEPARATED}
+    -P ${ZEPHYR_BASE}/cmake/usage/usage.cmake
+    )
 
   # DTS should be close to kconfig because CONFIG_ variables from
   # kconfig and dts should be available at the same time.
@@ -386,42 +371,6 @@ if(FIRST_BOILERPLATE_EXECUTION)
   # and possibly change the toolchain.
   include(${ZEPHYR_BASE}/cmake/zephyr_module.cmake)
   include(${ZEPHYR_BASE}/cmake/generic_toolchain.cmake)
-
-  string(REPLACE ";" " " BOARD_ROOT_SPACE_SEPARATED "${BOARD_ROOT}")
-  string(REPLACE ";" " " SHIELD_LIST_SPACE_SEPARATED "${SHIELD_LIST}")
-  # NB: The reason it is 'usage' and not help is that CMake already
-  # defines a target 'help'
-  add_custom_target(
-    usage
-    ${CMAKE_COMMAND}
-    -DBOARD_ROOT_SPACE_SEPARATED=${BOARD_ROOT_SPACE_SEPARATED}
-	-DSHIELD_LIST_SPACE_SEPARATED=${SHIELD_LIST_SPACE_SEPARATED}
-    -P ${ZEPHYR_BASE}/cmake/usage/usage.cmake
-    )
-
-  if(CONF_FILE)
-    #   # CONF_FILE has either been specified on the cmake CLI or is already
-    #   # in the CMakeCache.txt. This has precedence over the environment
-    #   # variable CONF_FILE and the default prj.conf
-  elseif(DEFINED ENV{CONF_FILE})
-    set(CONF_FILE $ENV{CONF_FILE})
-  elseif(COMMAND set_conf_file)
-    set_conf_file()
-  elseif(EXISTS   ${APPLICATION_SOURCE_DIR}/prj_${BOARD}.conf)
-    set(CONF_FILE ${APPLICATION_SOURCE_DIR}/prj_${BOARD}.conf)
-  elseif(EXISTS   ${APPLICATION_SOURCE_DIR}/prj.conf)
-    set(CONF_FILE ${APPLICATION_SOURCE_DIR}/prj.conf)
-  endif()
-
-  if(DTC_OVERLAY_FILE)
-    #   # DTC_OVERLAY_FILE has either been specified on the cmake CLI or is already
-    #   # in the CMakeCache.txt. This has precedence over the environment
-    #   # variable DTC_OVERLAY_FILE
-  elseif(DEFINED ENV{DTC_OVERLAY_FILE})
-    set(DTC_OVERLAY_FILE $ENV{DTC_OVERLAY_FILE})
-  elseif(EXISTS          ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
-    set(DTC_OVERLAY_FILE ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
-  endif()
 else() # NOT FIRST_BOILERPLATE_EXECUTION
 
   # Have the child image select the same BOARD that was selected by
@@ -439,6 +388,68 @@ else() # NOT FIRST_BOILERPLATE_EXECUTION
   if(EXISTS              ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
     set(DTC_OVERLAY_FILE ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
   endif()
+endif(FIRST_BOILERPLATE_EXECUTION)
+
+# Use BOARD to search for a '_defconfig' file.
+# e.g. zephyr/boards/arm/96b_carbon_nrf51/96b_carbon_nrf51_defconfig.
+# When found, use that path to infer the ARCH we are building for.
+foreach(root ${BOARD_ROOT})
+  # NB: find_path will return immediately if the output variable is
+  # already set
+  find_path(TMP_BOARD_DIR
+    NAMES ${BOARD}_defconfig
+    PATHS ${root}/boards/*/*
+    NO_DEFAULT_PATH
+    )
+
+  # Ensure that BOARD_DIR is not in CACHE so that different images can use
+  # different BOARD_DIR.
+  get_property(BOARD_DIR CACHE TMP_BOARD_DIR PROPERTY VALUE)
+  unset(TMP_BOARD_DIR CACHE)
+
+  if(BOARD_DIR AND NOT (${root} STREQUAL ${ZEPHYR_BASE}))
+    set(USING_OUT_OF_TREE_BOARD 1)
+  endif()
+endforeach()
+
+if(NOT BOARD_DIR)
+  message("No board named '${BOARD}' found")
+  print_usage()
+  unset(CACHED_BOARD CACHE)
+  message(FATAL_ERROR "Invalid usage")
+endif()
+
+get_filename_component(BOARD_ARCH_DIR ${BOARD_DIR}}     DIRECTORY)
+get_filename_component(BOARD_FAMILY   ${BOARD_DIR}      NAME)
+get_filename_component(ARCH           ${BOARD_ARCH_DIR} NAME)
+
+# Pick host system's toolchain if we are targeting posix
+if((${ARCH} STREQUAL "posix") OR (${ARCH} STREQUAL "x86_64"))
+  set(ZEPHYR_TOOLCHAIN_VARIANT "host")
+endif()
+
+if(CONF_FILE)
+  #   # CONF_FILE has either been specified on the cmake CLI or is already
+  #   # in the CMakeCache.txt. This has precedence over the environment
+  #   # variable CONF_FILE and the default prj.conf
+elseif(DEFINED ENV{CONF_FILE})
+  set(CONF_FILE $ENV{CONF_FILE})
+elseif(COMMAND set_conf_file)
+  set_conf_file()
+elseif(EXISTS   ${APPLICATION_SOURCE_DIR}/prj_${BOARD}.conf)
+  set(CONF_FILE ${APPLICATION_SOURCE_DIR}/prj_${BOARD}.conf)
+elseif(EXISTS   ${APPLICATION_SOURCE_DIR}/prj.conf)
+  set(CONF_FILE ${APPLICATION_SOURCE_DIR}/prj.conf)
+endif()
+
+if(DTC_OVERLAY_FILE)
+  #   # DTC_OVERLAY_FILE has either been specified on the cmake CLI or is already
+  #   # in the CMakeCache.txt. This has precedence over the environment
+  #   # variable DTC_OVERLAY_FILE
+elseif(DEFINED ENV{DTC_OVERLAY_FILE})
+  set(DTC_OVERLAY_FILE $ENV{DTC_OVERLAY_FILE})
+elseif(EXISTS          ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
+  set(DTC_OVERLAY_FILE ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
 endif()
 
 set(CONF_FILE ${CONF_FILE} CACHE STRING "If desired, you can build the application using\
