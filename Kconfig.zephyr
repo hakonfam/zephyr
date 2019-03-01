@@ -38,7 +38,7 @@ source "subsys/Kconfig"
 
 source "ext/Kconfig"
 
-source "$(PROJECT_BINARY_DIR)/Kconfig.modules"
+source "$(CMAKE_BINARY_DIR)/Kconfig.modules"
 
 menu "Build and Link Features"
 
