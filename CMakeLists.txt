@@ -442,6 +442,7 @@ function(construct_add_custom_command_for_linker_pass linker_output_name output_
       set_property(GLOBAL APPEND PROPERTY
         PROPERTY_LINKER_SCRIPT_DEFINES
         -DUSE_PARTITION_MANAGER)
+      add_dependencies(${OFFSETS_LIB} PARTITION_MANAGER_TARGET)
     endif()
   else()
     set(linker_pass_define "")
@@ -474,7 +475,7 @@ function(construct_add_custom_command_for_linker_pass linker_output_name output_
     OUTPUT ${linker_cmd_file_name}
     DEPENDS
     ${LINKER_SCRIPT}
-    ${partition_manager_target}
+    PARTITION_MANAGER_TARGET
     ${extra_dependencies}
     # NB: 'linker_script_dep' will use a keyword that ends 'DEPENDS'
     ${linker_script_dep}
@@ -722,10 +723,6 @@ set(OFFSETS_C_PATH ${ARCH_DIR}/${ARCH}/core/offsets/offsets.c)
 set(OFFSETS_H_PATH ${PROJECT_BINARY_DIR}/include/generated/offsets.h)
 add_library(          ${OFFSETS_LIB} OBJECT ${OFFSETS_C_PATH})
 target_link_libraries(${OFFSETS_LIB} ${IMAGE}zephyr_interface)
-
-if(PARTITION_MANAGER_TARGET_PRESENT)
-add_dependencies(${OFFSETS_LIB} PARTITION_MANAGER_TARGET)
-endif()
 
 add_dependencies(     ${OFFSETS_LIB}
   ${SYSCALL_LIST_H_TARGET}
@@ -1377,7 +1374,6 @@ add_custom_command(
   # NB: COMMENT only works for some CMake-Generators
   )
 if(FIRST_BOILERPLATE_EXECUTION)
-
   get_property(SECURE_IMAGE_HEX_FILES_TO_MERGE
 	GLOBAL
 	PROPERTY

@@ -371,6 +371,9 @@ if(FIRST_BOILERPLATE_EXECUTION)
   # and possibly change the toolchain.
   include(${ZEPHYR_BASE}/cmake/zephyr_module.cmake)
   include(${ZEPHYR_BASE}/cmake/generic_toolchain.cmake)
+
+  # Create dummy target for use with partition manager.
+  add_custom_target(PARTITION_MANAGER_TARGET)
 else() # NOT FIRST_BOILERPLATE_EXECUTION
 
   # Have the child image select the same BOARD that was selected by
@@ -536,11 +539,6 @@ endif()
 zephyr_library_named(app)
 set_property(TARGET ${IMAGE}app PROPERTY ARCHIVE_OUTPUT_DIRECTORY ${IMAGE}app)
 
-if(EXISTS ${APPLICATION_SOURCE_DIR}/pm.yaml)
-  set(PARTITION_MANAGER_TARGET_PRESENT 1)
-  set(PARTITION_MANAGER_TARGET PARTITION_MANAGER_TARGET)
-endif()
-
 add_subdirectory(${ZEPHYR_BASE} ${__build_dir})
 
 if(EXISTS ${APPLICATION_SOURCE_DIR}/pm.yaml)
@@ -594,9 +592,8 @@ if(FIRST_BOILERPLATE_EXECUTION)
       PARTITION_MANAGER_CONFIG_TARGETS
       )
     file(GLOB_RECURSE autoconf_files "${PROJECT_BINARY_DIR}/**/autoconf.h")
-    add_custom_target(
-      PARTITION_MANAGER_TARGET
-      # For every input_file
+    add_custom_command(
+      OUTPUT ${PROJECT_BINARY_DIR}/include/generated/pm_config.h
       COMMAND
       ${PYTHON_EXECUTABLE}
       ${ZEPHYR_BASE}/scripts/partition_manager.py
@@ -609,6 +606,16 @@ if(FIRST_BOILERPLATE_EXECUTION)
       DEPENDS
       ${partition_manager_config_targets}
       )
+    add_custom_target(
+      PARTITION_MANAGER_TARGET_PROPER
+      DEPENDS
+      ${PROJECT_BINARY_DIR}/include/generated/pm_config.h
+      )
+      # For every input_file
+
+    # Do this to allow PARTITION_MANAGER_TARGET to be depended on in root
+    # CMakeLists.txt
+    add_dependencies(PARTITION_MANAGER_TARGET PARTITION_MANAGER_TARGET_PROPER)
   endif()
 endif()
 
