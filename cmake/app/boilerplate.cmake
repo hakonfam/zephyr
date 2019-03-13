@@ -206,65 +206,6 @@ if(FIRST_BOILERPLATE_EXECUTION)
   # Store the selected board in the cache
   set(CACHED_BOARD ${BOARD} CACHE STRING "Selected board")
 
-  # The SHIELD can be set by 3 sources. Through environment variables,
-  # through the cmake CLI, and through CMakeLists.txt.
-  #
-  # CLI has the highest precedence, then comes environment variables,
-  # and then finally CMakeLists.txt.
-  #
-  # A user can ignore all the precedence rules if he simply always uses
-  # the same source. E.g. always specifies -DSHIELD= on the command line,
-  # always has an environment variable set, or always has a set(SHIELD
-  # foo) line in his CMakeLists.txt and avoids mixing sources.
-  #
-  # The selected SHIELD can be accessed through the variable 'SHIELD'.
-
-  # Read out the cached shield value if present
-  get_property(cached_shield_value CACHE SHIELD PROPERTY VALUE)
-
-  # There are actually 4 sources, the three user input sources, and the
-  # previously used value (CACHED_SHIELD). The previously used value has
-  # precedence, and if we detect that the user is trying to change the
-  # value we give him a warning about needing to clean the build
-  # directory to be able to change shields.
-
-  set(shield_cli_argument ${cached_shield_value}) # Either new or old
-  if(shield_cli_argument STREQUAL CACHED_SHIELD)
-	  # We already have a CACHED_SHIELD so there is no new input on the CLI
-	  unset(shield_cli_argument)
-  endif()
-
-  set(shield_app_cmake_lists ${SHIELD})
-  if(cached_shield_value STREQUAL SHIELD)
-	  # The app build scripts did not set a default, The SHIELD we are
-	  # reading is the cached value from the CLI
-	  unset(shield_app_cmake_lists)
-  endif()
-
-  if(CACHED_SHIELD)
-	  # Warn the user if it looks like he is trying to change the shield
-	  # without cleaning first
-	  if(shield_cli_argument)
-      if(NOT (CACHED_SHIELD STREQUAL shield_cli_argument))
-		    message(WARNING "The build directory must be cleaned pristinely when changing shields")
-		    # TODO: Support changing shields without requiring a clean build
-      endif()
-	  endif()
-
-	  set(SHIELD ${CACHED_SHIELD})
-  elseif(shield_cli_argument)
-	  set(SHIELD ${shield_cli_argument})
-
-  elseif(DEFINED ENV{SHIELD})
-	  set(SHIELD $ENV{SHIELD})
-
-  elseif(shield_app_cmake_lists)
-	  set(SHIELD ${shield_app_cmake_lists})
-  endif()
-
-  # Store the selected shield in the cache
-  set(CACHED_SHIELD ${SHIELD} CACHE STRING "Selected shield")
-
   if(NOT ARCH_ROOT)
     set(ARCH_DIR ${ZEPHYR_BASE}/arch)
   else()
@@ -308,11 +249,73 @@ else() # NOT FIRST_BOILERPLATE_EXECUTION
   # the parent.
   set(BOARD ${CACHED_BOARD})
 
-  unset(DTC_OVERLAY_FILE)
+  unset(${IMAGE}DTC_OVERLAY_FILE)
   if(EXISTS              ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
-    set(DTC_OVERLAY_FILE ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
+    set(${IMAGE}DTC_OVERLAY_FILE ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
   endif()
 endif(FIRST_BOILERPLATE_EXECUTION)
+
+# The SHIELD can be set by 3 sources. Through environment variables,
+# through the cmake CLI, and through CMakeLists.txt.
+#
+# CLI has the highest precedence, then comes environment variables,
+# and then finally CMakeLists.txt.
+#
+# A user can ignore all the precedence rules if she simply always uses
+# the same source. E.g. always specifies -DSHIELD= on the command line,
+# always has an environment variable set, or always has a set(SHIELD
+# foo) line in her CMakeLists.txt and avoids mixing sources.
+#
+# The selected SHIELD can be accessed through the variable 'SHIELD'.
+#
+# To specify a SHIELD specifically for an image, prefix with the image
+# name. E.g. -Dmcuboot_SHIELD= on the command line.
+
+# Read out the cached shield value if present
+get_property(cached_shield_value CACHE ${IMAGE}SHIELD PROPERTY VALUE)
+
+# There are actually 4 sources, the three user input sources, and the
+# previously used value (CACHED_SHIELD). The previously used value has
+# precedence, and if we detect that the user is trying to change the
+# value we give him a warning about needing to clean the build
+# directory to be able to change shields.
+
+set(shield_cli_argument ${cached_shield_value}) # Either new or old
+if(shield_cli_argument STREQUAL ${IMAGE}CACHED_SHIELD)
+  # We already have a CACHED_SHIELD so there is no new input on the CLI
+  unset(shield_cli_argument)
+endif()
+
+set(shield_app_cmake_lists ${${IMAGE}SHIELD})
+if(cached_shield_value STREQUAL ${IMAGE}SHIELD)
+  # The app build scripts did not set a default, The SHIELD we are
+  # reading is the cached value from the CLI
+  unset(shield_app_cmake_lists)
+endif()
+
+if(${IMAGE}CACHED_SHIELD)
+  # Warn the user if it looks like she is trying to change the shield
+  # without cleaning first
+  if(shield_cli_argument)
+    if(NOT (${IMAGE}CACHED_SHIELD STREQUAL shield_cli_argument))
+      message(WARNING "The build directory must be cleaned pristinely when changing shields")
+      # TODO: Support changing shields without requiring a clean build
+    endif()
+  endif()
+
+  set(${IMAGE}SHIELD ${${IMAGE}CACHED_SHIELD})
+elseif(shield_cli_argument)
+  set(${IMAGE}SHIELD ${shield_cli_argument})
+
+elseif(DEFINED ENV{${IMAGE}SHIELD})
+  set(${IMAGE}SHIELD $ENV{${IMAGE}SHIELD})
+
+elseif(shield_app_cmake_lists)
+  set(${IMAGE}SHIELD ${shield_app_cmake_lists})
+endif()
+
+# Store the selected shield in the cache
+set(${IMAGE}CACHED_SHIELD ${${IMAGE}SHIELD} CACHE STRING "Selected shield")
 
 # Use BOARD to search for a '_defconfig' file.
 # e.g. zephyr/boards/arm/96b_carbon_nrf51/96b_carbon_nrf51_defconfig.
@@ -440,26 +443,30 @@ elseif(EXISTS   ${APPLICATION_SOURCE_DIR}/prj.conf)
   set(${IMAGE}CONF_FILE ${APPLICATION_SOURCE_DIR}/prj.conf)
 endif()
 
-if(DTC_OVERLAY_FILE)
+if(${IMAGE}DTC_OVERLAY_FILE)
   # DTC_OVERLAY_FILE has either been specified on the cmake CLI or is
   # already in the CMakeCache.txt. This has precedence over the
   # environment variable DTC_OVERLAY_FILE
-elseif(DEFINED ENV{DTC_OVERLAY_FILE})
-  set(DTC_OVERLAY_FILE $ENV{DTC_OVERLAY_FILE})
+elseif(DEFINED ENV{${IMAGE}DTC_OVERLAY_FILE})
+  set(${IMAGE}DTC_OVERLAY_FILE $ENV{${IMAGE}DTC_OVERLAY_FILE})
 elseif(EXISTS          ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
-  set(DTC_OVERLAY_FILE ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
+  set(${IMAGE}DTC_OVERLAY_FILE ${APPLICATION_SOURCE_DIR}/${BOARD}.overlay)
 endif()
 
 set(${IMAGE}CONF_FILE ${${IMAGE}CONF_FILE} CACHE STRING "If desired, you can build the application using\
 the configuration settings specified in an alternate .conf file using this parameter. \
 These settings will override the settings in the application’s .config file or its default .conf file.\
-Multiple files may be listed, e.g. CONF_FILE=\"prj1.conf prj2.conf\"")
+Multiple files may be listed, e.g. CONF_FILE=\"prj1.conf prj2.conf\". \
+To specify an alternate .conf file for a specific image, prefix \"CONF_FILE\" \
+with the image name. For instance \"mcuboot_CONF_FILE\".")
 
-set(DTC_OVERLAY_FILE ${DTC_OVERLAY_FILE} CACHE STRING "If desired, you can \
+set(${IMAGE}DTC_OVERLAY_FILE ${${IMAGE}DTC_OVERLAY_FILE} CACHE STRING "If desired, you can \
 build the application using the DT configuration settings specified in an \
 alternate .overlay file using this parameter. These settings will override the \
 settings in the board's .dts file. Multiple files may be listed, e.g. \
-DTC_OVERLAY_FILE=\"dts1.overlay dts2.overlay\"")
+DTC_OVERLAY_FILE=\"dts1.overlay dts2.overlay\". To  specify an alternate
+.overlay file for a specific image, prefix \"DTC_OVERLAY_FILE\" with the image name. \
+For instance \"mcuboot_DTC_OVERLAY_FILE\".")
 
 include(${ZEPHYR_BASE}/cmake/dts.cmake)
 include(${ZEPHYR_BASE}/cmake/kconfig.cmake)
