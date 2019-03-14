@@ -1490,14 +1490,16 @@ where each image enables the child image that boots it. The simplest
 and most common organization is a single application image that
 enables a single bootloader image.
 
-When a parent image enables a child image through Kconfig both images
-will be configured when CMake is run and both images will be built
-when ninja is run. In addition to building both images the build
-system will merge the hex files together so that they can be easily
-flashed onto the device through the "ninja flash" target. Meaning, for
-the simplest scenario, one can enable and integrate an additional
-image without even realizing it with the same workflow as is used for
-additional libraries, enablement through Kconfig.
+When a parent image enables a child image through Kconfig, both images will be
+configured when CMake is run. During the building of the parent image,
+depending on the configuration of the parent image, the child image will either
+be built from source, merged in as a prebuilt hex file, or ignored. If the
+configuration states that the child image should be included as a hex file or
+built from source, the build system will merge the hex files of the parent and
+child image together so that they can be easily flashed onto the device through
+the "ninja flash" target.  Meaning, for the simplest scenario one can
+enable and integrate an additional image without even realizing it with the
+same workflow as is used for additional libraries, enablement through Kconfig.
 
 Configuring child images is done with the same mechanisms as for the
 parent images. Through CMake variables, Kconfig input fragments, and
@@ -1553,6 +1555,43 @@ child's build scripts. Note that in addition the child image's
 application build scripts being executed, most of the core build
 scripts are executed for a second time as well, but now with a
 different Kconfig'uration and possibly DeviceTree settings.
+
+Some Kconfig options must be added to allow the parent image to choose how to
+include the child image. The three options are (1) build from source, (2)
+include as hex file, or (3) skip building entirely. Option (1) will result in
+the child image being built from source alongside the parent image. Option (2)
+will require a prebuilt hex file to be specified in Kconfig, which will be
+merged with the parent image hex file. Option (3) will cause the child image to
+not be built. These options are shown below for MCUBoot.
+
+..code-block:: Kconfig
+  choice
+  	prompt "MCUBoot build strategy"
+  	default MCUBOOT_BUILD_STRATEGY_FROM_SOURCE
+
+  config MCUBOOT_BUILD_STRATEGY_USE_HEX_FILE
+  	# Mandatory option when being built through 'zephyr_add_executable'
+  	bool "Use hex file instead of building MCUBoot"
+
+  if MCUBOOT_BUILD_STRATEGY_USE_HEX_FILE
+
+  config MCUBOOT_HEX_FILE
+  	# Mandatory option when being built through 'zephyr_add_executable'
+  	string "MCUBoot hex file"
+
+  endif # MCUBOOT_USE_HEX_FILE
+
+  config MCUBOOT_BUILD_STRATEGY_SKIP_BUILD
+  	# Mandatory option when being built through 'zephyr_add_executable'
+  	bool "Skip building MCUBoot"
+
+  config MCUBOOT_BUILD_STRATEGY_FROM_SOURCE
+  	# Mandatory option when being built through 'zephyr_add_executable'
+  	bool "Build from source"
+
+  endchoice
+
+
 
 Application-Specific Code
 *************************
