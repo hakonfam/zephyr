@@ -1210,7 +1210,7 @@ if(CONFIG_USERSPACE)
     ${NEWLIB_PART} ${MBEDTLS_PART}
     $<$<BOOL:${CMAKE_VERBOSE_MAKEFILE}>:--verbose>
     DEPENDS
-    kernel
+    ${KERNEL_LIBRARY}
     ${ZEPHYR_LIBS_PROPERTY}
     WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/
     COMMENT "Generating app_smem_unaligned linker section"
