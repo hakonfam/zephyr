@@ -11,12 +11,12 @@ that will send IPv4 or IPv6 packets, wait for the data to be sent back,
 and then verify it matches the data that was sent.
 
 The source code for this sample application can be found at:
-:file:`samples/net/sockets/echo_client`.
+:zephyr_file:`samples/net/sockets/echo_client`.
 
 Requirements
 ************
 
-- :ref:`networking_with_qemu`
+- :ref:`networking_with_host`
 
 Building and Running
 ********************

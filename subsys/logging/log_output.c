@@ -20,10 +20,10 @@
 #define HEXDUMP_BYTES_IN_LINE 8
 
 #define  DROPPED_COLOR_PREFIX \
-	_LOG_EVAL(CONFIG_LOG_BACKEND_SHOW_COLOR, (LOG_COLOR_CODE_RED), ())
+	Z_LOG_EVAL(CONFIG_LOG_BACKEND_SHOW_COLOR, (LOG_COLOR_CODE_RED), ())
 
 #define DROPPED_COLOR_POSTFIX \
-	_LOG_EVAL(CONFIG_LOG_BACKEND_SHOW_COLOR, (LOG_COLOR_CODE_DEFAULT), ())
+	Z_LOG_EVAL(CONFIG_LOG_BACKEND_SHOW_COLOR, (LOG_COLOR_CODE_DEFAULT), ())
 
 static const char *const severity[] = {
 	NULL,
@@ -115,7 +115,7 @@ static int print_formatted(const struct log_output *log_output,
 
 	va_start(args, fmt);
 #if !defined(CONFIG_NEWLIB_LIBC) && !defined(CONFIG_ARCH_POSIX) && \
-    !defined(CONFIG_LOG_DISABLE_FANCY_OUTPUT_FORMATTING)
+    defined(CONFIG_LOG_ENABLE_FANCY_OUTPUT_FORMATTING)
 	length = _prf(out_func, (void *)log_output, (char *)fmt, args);
 #else
 	_vprintk(out_func, (void *)log_output, fmt, args);
@@ -553,7 +553,7 @@ void log_output_string(const struct log_output *log_output,
 	}
 
 #if !defined(CONFIG_NEWLIB_LIBC) && !defined(CONFIG_ARCH_POSIX) && \
-    !defined(CONFIG_LOG_DISABLE_FANCY_OUTPUT_FORMATTING)
+    defined(CONFIG_LOG_ENABLE_FANCY_OUTPUT_FORMATTING)
 	length = _prf(out_func, (void *)log_output, (char *)fmt, ap);
 #else
 	_vprintk(out_func, (void *)log_output, fmt, ap);

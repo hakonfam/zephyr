@@ -417,7 +417,7 @@ static int engine_add_observer(struct lwm2m_message *msg,
 	struct lwm2m_engine_obj_inst *obj_inst = NULL;
 	struct observe_node *obs;
 	struct notification_attrs attrs = {
-		.flags = BIT(LWM2M_ATTR_PMIN) || BIT(LWM2M_ATTR_PMAX),
+		.flags = BIT(LWM2M_ATTR_PMIN) | BIT(LWM2M_ATTR_PMAX),
 		.pmin  = DEFAULT_SERVER_PMIN,
 		.pmax  = DEFAULT_SERVER_PMAX,
 	};
@@ -3929,11 +3929,6 @@ static void socket_receive_loop(void)
 			len = recvfrom(sock_ctx[i]->sock_fd, in_buf,
 				       sizeof(in_buf) - 1, 0,
 				       &from_addr, &from_addr_len);
-			if (errno) {
-				LOG_ERR("Sock RECV error: %d", errno);
-				/* TODO: handle error? */
-				continue;
-			}
 
 			if (len < 0) {
 				LOG_ERR("Error reading response: %d", errno);

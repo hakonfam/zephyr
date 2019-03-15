@@ -363,19 +363,24 @@ static inline int gpio_dw_resume_from_suspend_port(struct device *port)
 * the *context may include IN data or/and OUT data
 */
 static int gpio_dw_device_ctrl(struct device *port, u32_t ctrl_command,
-							void *context)
+			       void *context, device_pm_cb cb, void *arg)
 {
+	int ret = 0;
+
 	if (ctrl_command == DEVICE_PM_SET_POWER_STATE) {
 		if (*((u32_t *)context) == DEVICE_PM_SUSPEND_STATE) {
-			return gpio_dw_suspend_port(port);
+			ret = gpio_dw_suspend_port(port);
 		} else if (*((u32_t *)context) == DEVICE_PM_ACTIVE_STATE) {
-			return gpio_dw_resume_from_suspend_port(port);
+			ret = gpio_dw_resume_from_suspend_port(port);
 		}
 	} else if (ctrl_command == DEVICE_PM_GET_POWER_STATE) {
 		*((u32_t *)context) = gpio_dw_get_power_state(port);
-		return 0;
 	}
-	return 0;
+
+	if (cb) {
+		cb(port, ret, context, arg);
+	}
+	return ret;
 }
 
 #else
@@ -502,7 +507,7 @@ static const struct gpio_dw_config gpio_config_0 = {
 	.bits = DT_GPIO_DW_0_BITS,
 	.config_func = gpio_config_0_irq,
 #ifdef CONFIG_GPIO_DW_0_IRQ_SHARED
-	.shared_irq_dev_name = CONFIG_GPIO_DW_0_IRQ_SHARED_NAME,
+	.shared_irq_dev_name = DT_GPIO_DW_0_IRQ_SHARED_NAME,
 #endif
 #ifdef CONFIG_GPIO_DW_CLOCK_GATE
 	.clock_data = UINT_TO_POINTER(CONFIG_GPIO_DW_0_CLOCK_GATE_SUBSYS),
@@ -571,7 +576,7 @@ static const struct gpio_dw_config gpio_dw_config_1 = {
 	.config_func = gpio_config_1_irq,
 
 #ifdef CONFIG_GPIO_DW_1_IRQ_SHARED
-	.shared_irq_dev_name = CONFIG_GPIO_DW_1_IRQ_SHARED_NAME,
+	.shared_irq_dev_name = DT_GPIO_DW_1_IRQ_SHARED_NAME,
 #endif
 #ifdef CONFIG_GPIO_DW_CLOCK_GATE
 	.clock_data = UINT_TO_POINTER(CONFIG_GPIO_DW_1_CLOCK_GATE_SUBSYS),
@@ -638,7 +643,7 @@ static const struct gpio_dw_config gpio_dw_config_2 = {
 	.config_func = gpio_config_2_irq,
 
 #ifdef CONFIG_GPIO_DW_2_IRQ_SHARED
-	.shared_irq_dev_name = CONFIG_GPIO_DW_2_IRQ_SHARED_NAME,
+	.shared_irq_dev_name = DT_GPIO_DW_2_IRQ_SHARED_NAME,
 #endif
 #ifdef CONFIG_GPIO_DW_CLOCK_GATE
 	.clock_data = UINT_TO_POINTER(CONFIG_GPIO_DW_2_CLOCK_GATE_SUBSYS),
@@ -705,7 +710,7 @@ static const struct gpio_dw_config gpio_dw_config_3 = {
 	.config_func = gpio_config_3_irq,
 
 #ifdef CONFIG_GPIO_DW_3_IRQ_SHARED
-	.shared_irq_dev_name = CONFIG_GPIO_DW_3_IRQ_SHARED_NAME,
+	.shared_irq_dev_name = DT_GPIO_DW_3_IRQ_SHARED_NAME,
 #endif
 #ifdef CONFIG_GPIO_DW_CLOCK_GATE
 	.clock_data = UINT_TO_POINTER(CONFIG_GPIO_DW_3_CLOCK_GATE_SUBSYS),

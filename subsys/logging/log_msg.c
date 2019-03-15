@@ -74,10 +74,13 @@ union log_msg_chunk *log_msg_no_space_handle(void)
 	if (IS_ENABLED(CONFIG_LOG_MODE_OVERFLOW)) {
 		do {
 			more = log_process(true);
+			log_dropped();
 			err = k_mem_slab_alloc(&log_msg_pool,
 					       (void **)&msg,
 					       K_NO_WAIT);
 		} while ((err != 0) && more);
+	} else {
+		log_dropped();
 	}
 	return msg;
 
@@ -153,7 +156,7 @@ static struct log_msg *msg_alloc(u32_t nargs)
 {
 	struct log_msg_cont *cont;
 	struct log_msg_cont **next;
-	struct  log_msg *msg = _log_msg_std_alloc();
+	struct  log_msg *msg = z_log_msg_std_alloc();
 	int n = (int)nargs;
 
 	if ((msg == NULL) || nargs <= LOG_MSG_NARGS_SINGLE_CHUNK) {

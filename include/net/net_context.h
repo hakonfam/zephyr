@@ -283,6 +283,9 @@ struct net_context {
 		/** Priority of the network data sent via this net_context */
 		u8_t priority;
 #endif
+#if defined(CONFIG_NET_CONTEXT_TIMESTAMP)
+		bool timestamp;
+#endif
 	} options;
 
 	/** Protocol (UDP, TCP or IEEE 802.3 protocol value) */
@@ -293,6 +296,12 @@ struct net_context {
 
 	/** Network interface assigned to this context */
 	s8_t iface;
+
+	/** IPv6 hop limit or IPv4 ttl for packets sent via this context. */
+	union {
+		u8_t ipv6_hop_limit;
+		u8_t ipv4_ttl;
+	};
 };
 
 static inline bool net_context_is_used(struct net_context *context)
@@ -399,7 +408,7 @@ enum net_sock_type net_context_get_type(struct net_context *context)
 {
 	NET_ASSERT(context);
 
-	return ((context->flags & NET_CONTEXT_TYPE) >> 6);
+	return (enum net_sock_type)((context->flags & NET_CONTEXT_TYPE) >> 6);
 }
 
 /**
@@ -489,6 +498,28 @@ static inline void net_context_set_iface(struct net_context *context,
 	NET_ASSERT(iface);
 
 	context->iface = net_if_get_by_iface(iface);
+}
+
+static inline u8_t net_context_get_ipv4_ttl(struct net_context *context)
+{
+	return context->ipv4_ttl;
+}
+
+static inline void net_context_set_ipv4_ttl(struct net_context *context,
+					    u8_t ttl)
+{
+	context->ipv4_ttl = ttl;
+}
+
+static inline u8_t net_context_get_ipv6_hop_limit(struct net_context *context)
+{
+	return context->ipv6_hop_limit;
+}
+
+static inline void net_context_set_ipv6_hop_limit(struct net_context *context,
+						  u8_t hop_limit)
+{
+	context->ipv6_hop_limit = hop_limit;
 }
 
 /**
@@ -762,7 +793,7 @@ int net_context_send(struct net_pkt *pkt,
 		     void *user_data);
 
 /**
- * @brief Send a network buffer to a peer.
+ * @brief Send data to a peer.
  *
  * @details This function can be used to send network data to a peer
  * connection. This function will return immediately if the timeout
@@ -833,7 +864,7 @@ int net_context_sendto(struct net_pkt *pkt,
 
 
 /**
- * @brief Send a network buffer to a peer specified by address.
+ * @brief Send data to a peer specified by address.
  *
  * @details This function can be used to send network data to a peer
  * specified by address. This variant can only be used for datagram
@@ -850,8 +881,7 @@ int net_context_sendto(struct net_pkt *pkt,
  * @param context The network context to use.
  * @param buf The data buffer to send
  * @param len Length of the buffer
- * @param dst_addr Destination address. This will override the address
- * already set in network buffer.
+ * @param dst_addr Destination address.
  * @param addrlen Length of the address.
  * @param cb Caller-supplied callback function.
  * @param timeout Timeout for the connection. Possible values
@@ -936,7 +966,8 @@ int net_context_update_recv_wnd(struct net_context *context,
 				s32_t delta);
 
 enum net_context_option {
-	NET_OPT_PRIORITY = 1,
+	NET_OPT_PRIORITY	= 1,
+	NET_OPT_TIMESTAMP	= 2,
 };
 
 /**

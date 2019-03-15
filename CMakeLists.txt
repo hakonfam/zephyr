@@ -131,27 +131,66 @@ else()
   assert(0 "Unreachable code. Expected optimization level to have been chosen. See Kconfig.zephyr")
 endif()
 
-# Dialects of C++, corresponding to the multiple published ISO standards.
-# Which standard it implements can be selected using the -std= command-line option.
-set_ifndef(DIALECT_STD_CPP98 "c++98")
-set_ifndef(DIALECT_STD_CPP11 "c++11")
-set_ifndef(DIALECT_STD_CPP14 "c++14")
-set_ifndef(DIALECT_STD_CPP17 "c++17")
-set_ifndef(DIALECT_STD_CPP2A "c++2a")
+# @Intent: Obtain compiler specific flags related to C++ that are not influenced by kconfig
+toolchain_cc_cpp_base_flags(CPP_BASE_FLAGS)
+foreach(flag ${CPP_BASE_FLAGS})
+  zephyr_compile_options(
+    $<$<COMPILE_LANGUAGE:CXX>:${flag}>
+  )
+endforeach()
 
+# @Intent: Obtain compiler specific flags for compiling under different ISO standards of C++
+toolchain_cc_cpp_dialect_std_98_flags(CPP_DIALECT_STD_98_FLAGS)
+toolchain_cc_cpp_dialect_std_11_flags(CPP_DIALECT_STD_11_FLAGS)
+toolchain_cc_cpp_dialect_std_14_flags(CPP_DIALECT_STD_14_FLAGS)
+toolchain_cc_cpp_dialect_std_17_flags(CPP_DIALECT_STD_17_FLAGS)
+toolchain_cc_cpp_dialect_std_2a_flags(CPP_DIALECT_STD_2A_FLAGS)
+
+# From kconfig choice, pick a single dialect.
+# Kconfig choice ensures only one of these CONFIG_STD_CPP* is set.
 if(CONFIG_STD_CPP98)
-  set(STD_CPP_DIALECT ${DIALECT_STD_CPP98})
+  set(STD_CPP_DIALECT_FLAGS ${CPP_DIALECT_STD_98_FLAGS})
 elseif(CONFIG_STD_CPP11)
-  set(STD_CPP_DIALECT ${DIALECT_STD_CPP11}) # Default
+  set(STD_CPP_DIALECT_FLAGS ${CPP_DIALECT_STD_11_FLAGS}) # Default in kconfig
 elseif(CONFIG_STD_CPP14)
-  set(STD_CPP_DIALECT ${DIALECT_STD_CPP14})
+  set(STD_CPP_DIALECT_FLAGS ${CPP_DIALECT_STD_14_FLAGS})
 elseif(CONFIG_STD_CPP17)
-  set(STD_CPP_DIALECT ${DIALECT_STD_CPP17})
+  set(STD_CPP_DIALECT_FLAGS ${CPP_DIALECT_STD_17_FLAGS})
 elseif(CONFIG_STD_CPP2A)
-  set(STD_CPP_DIALECT ${DIALECT_STD_CPP2A})
+  set(STD_CPP_DIALECT_FLAGS ${CPP_DIALECT_STD_2A_FLAGS})
 else()
   assert(0 "Unreachable code. Expected C++ standard to have been chosen. See Kconfig.zephyr.")
 endif()
+
+foreach(flag ${STD_CPP_DIALECT_FLAGS})
+  zephyr_compile_options(
+    $<$<COMPILE_LANGUAGE:CXX>:${flag}>
+  )
+endforeach()
+
+if(NOT CONFIG_EXCEPTIONS)
+  # @Intent: Obtain compiler specific flags related to C++ Exceptions
+  toolchain_cc_cpp_no_exceptions_flag(CPP_NO_EXCEPTIONS_FLAG)
+  zephyr_compile_options(
+    $<$<COMPILE_LANGUAGE:CXX>:${CPP_NO_EXCEPTIONS_FLAG}>
+  )
+endif()
+
+if(NOT CONFIG_RTTI)
+  # @Intent: Obtain compiler specific flags related to C++ Run Time Type Information
+  toolchain_cc_cpp_no_rtti_flag(CPP_NO_RTTI_FLAG)
+  zephyr_compile_options(
+    $<$<COMPILE_LANGUAGE:CXX>:${CPP_NO_RTTI_FLAG}>
+  )
+endif()
+
+if(CONFIG_MISRA_SANE)
+  zephyr_compile_options($<$<COMPILE_LANGUAGE:C>:-Werror=vla>)
+  zephyr_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Werror=vla>)
+endif()
+
+# @Intent: Obtain compiler specific flags for standard C includes
+toolchain_cc_nostdinc()
 
 zephyr_compile_options(
   ${OPTIMIZATION_FLAG} # Usually -Os
@@ -164,31 +203,19 @@ zephyr_compile_options(
   -ffreestanding
   -Wno-main
   -fno-common
-  ${NOSTDINC_F}
   ${TOOLCHAIN_C_FLAGS}
 )
 
+# @Intent: Obtain compiler specific flags related to assembly
+toolchain_cc_asm_base_flags(ASM_BASE_FLAG)
 zephyr_compile_options(
-  $<$<COMPILE_LANGUAGE:CXX>:-std=${STD_CPP_DIALECT}>
-  $<$<COMPILE_LANGUAGE:CXX>:-fcheck-new>
-  $<$<COMPILE_LANGUAGE:CXX>:-ffunction-sections>
-  $<$<COMPILE_LANGUAGE:CXX>:-fdata-sections>
+  $<$<COMPILE_LANGUAGE:ASM>:${ASM_BASE_FLAG}>
+)
 
-  $<$<COMPILE_LANGUAGE:ASM>:-xassembler-with-cpp>
+# Common toolchain-agnostic assembly flags
+zephyr_compile_options(
   $<$<COMPILE_LANGUAGE:ASM>:-D_ASMLANGUAGE>
 )
-
-if(NOT CONFIG_RTTI)
-zephyr_compile_options(
-  $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
-)
-endif()
-
-if(NOT CONFIG_EXCEPTIONS)
-zephyr_compile_options(
-  $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
-)
-endif()
 
 zephyr_ld_options(
   ${TOOLCHAIN_LD_FLAGS}
@@ -264,11 +291,6 @@ if(W MATCHES "3")
     )
 endif()
 
-if(NOT CONFIG_STD_CPP98) # "register" keyword was deprecated since C++11.
-  zephyr_compile_options(
-    $<$<COMPILE_LANGUAGE:CXX>:-Wno-register>
-    )
-endif()
 
 # Allow the user to inject options when calling cmake, e.g.
 # 'cmake -DEXTRA_CFLAGS="-Werror -Wno-deprecated-declarations" ..'
@@ -288,8 +310,8 @@ if(CONFIG_OVERRIDE_FRAME_POINTER_DEFAULT)
   endif()
 endif()
 
-separate_arguments(CONFIG_COMPILER_OPT_AS_LIST UNIX_COMMAND ${CONFIG_COMPILER_OPT})
-zephyr_compile_options(${CONFIG_COMPILER_OPT_AS_LIST})
+separate_arguments(COMPILER_OPT_AS_LIST UNIX_COMMAND ${CONFIG_COMPILER_OPT})
+zephyr_compile_options(${COMPILER_OPT_AS_LIST})
 
 # TODO: Include arch compiler options at this point.
 
@@ -324,8 +346,6 @@ endif()
 
 zephyr_cc_option_ifdef(CONFIG_STACK_USAGE            -fstack-usage)
 
-zephyr_system_include_directories(${NOSTDINC})
-
 # Force an error when things like SYS_INIT(foo, ...) occur with a missing header.
 zephyr_cc_option(-Werror=implicit-int)
 
@@ -341,9 +361,8 @@ zephyr_cc_option(-Wpointer-arith)
 # Declare MPU userspace dependencies before the linker scripts to make
 # sure the order of dependencies are met
 if(CONFIG_USERSPACE)
-  if(CONFIG_APP_SHARED_MEM)
-    set(APP_SMEM_DEP app_smem_linker)
-  endif()
+  set(APP_SMEM_ALIGNED_DEP app_smem_aligned_linker)
+  set(APP_SMEM_UNALIGNED_DEP app_smem_unaligned_linker)
   if(CONFIG_ARM)
     set(PRIV_STACK_DEP ${PRIV_STACKS_PREBUILT})
   endif()
@@ -363,9 +382,12 @@ zephyr_ld_options(
   ${LINKERFLAGPREFIX},--build-id=none
   )
 
-if(NOT CONFIG_NATIVE_APPLICATION)
-  set(NOSTDINC_F -nostdinc)
-endif()
+# Sort the common symbols and each input section by alignment
+# in descending order to minimize padding between these symbols.
+zephyr_ld_options(
+  ${LINKERFLAGPREFIX},--sort-common=descending
+  ${LINKERFLAGPREFIX},--sort-section=alignment
+  )
 
 get_property(TOPT GLOBAL PROPERTY TOPT)
 set_ifndef(  TOPT -T)
@@ -432,6 +454,8 @@ function(construct_add_custom_command_for_linker_pass linker_output_name output_
     set(linker_pass_define -DLINKER_PASS2)
   elseif (${linker_output_name} MATCHES "^linker$")
     if(EXISTS ${APPLICATION_SOURCE_DIR}/pm.yaml)
+  elseif (${linker_output_name} MATCHES "^linker_app_smem_unaligned$")
+    set(linker_pass_define -DLINKER_APP_SMEM_UNALIGNED)
       set_property(GLOBAL PROPERTY PROPERTY_PARTITION_MANAGER_TARGET
         PARTITION_MANAGER_TARGET)
       # Duplicates are removed before this list is used.
@@ -481,7 +505,6 @@ function(construct_add_custom_command_for_linker_pass linker_output_name output_
     ${linker_script_dep}
     COMMAND ${CMAKE_C_COMPILER}
     -x assembler-with-cpp
-    ${NOSTDINC_F}
     ${NOSYSDEF_CFLAG}
     -MD -MF ${linker_cmd_file_name}.dep -MT ${base_name}/${linker_cmd_file_name}
     ${current_includes}
@@ -513,9 +536,9 @@ foreach(path
   endif()
 endforeach()
 
-set_ifndef(  DTS_BOARD_FIXUP_FILE                                   ${BOARD_DIR}/dts_fixup.h)
-set_ifndef(    DTS_SOC_FIXUP_FILE                 ${SOC_DIR}/${ARCH}/${SOC_PATH}/dts_fixup.h)
-set(           DTS_APP_FIXUP_FILE                      ${APPLICATION_SOURCE_DIR}/dts_fixup.h)
+set_ifndef(${IMAGE}DTS_BOARD_FIXUP_FILE ${BOARD_DIR}/dts_fixup.h)
+set_ifndef(${IMAGE}DTS_SOC_FIXUP_FILE   ${SOC_DIR}/${ARCH}/${SOC_PATH}/dts_fixup.h)
+set(               DTS_APP_FIXUP_FILE   ${APPLICATION_SOURCE_DIR}/dts_fixup.h)
 
 set_ifndef(${IMAGE}DTS_CAT_OF_FIXUP_FILES ${ZEPHYR_BINARY_DIR}/include/generated/generated_dts_board_fixups.h)
 
@@ -571,15 +594,16 @@ if(EXISTS ${NRF_DIR})
 	add_subdirectory(${NRF_DIR} ${PROJECT_BINARY_DIR}/nrf)
 endif()
 add_subdirectory_ifdef(CONFIG_KERNEL drivers)
-add_subdirectory(tests)
 
 # Add all zephyr modules subdirectories.
-message("Including module(s): ${ZEPHYR_MODULES_NAME}")
+if(ZEPHYR_MODULES_NAME)
+  message("Including module(s): ${ZEPHYR_MODULES_NAME}")
+endif()
 set(index 0)
 foreach(module_name ${ZEPHYR_MODULES_NAME})
   list(GET ZEPHYR_MODULES_DIR ${index} module_dir)
   math(EXPR index "${index} + 1")
-  add_subdirectory(${module_dir} ${CMAKE_BINARY_DIR}/${module_name})
+  add_subdirectory(${module_dir} ${CMAKE_CURRENT_BINARY_DIR}/${module_name})
 endforeach()
 
 set(syscall_macros_h ${ZEPHYR_BINARY_DIR}/include/generated/syscall_macros.h)
@@ -752,24 +776,6 @@ get_property(ZEPHYR_LIBS_PROPERTY GLOBAL PROPERTY ${IMAGE}ZEPHYR_LIBS)
 foreach(zephyr_lib ${ZEPHYR_LIBS_PROPERTY})
   # TODO: Could this become an INTERFACE property of ${IMAGE}zephyr_interface?
   add_dependencies(${zephyr_lib} ${OFFSETS_H_TARGET})
-
-  # Verify that all (non-imported) libraries have source
-  # files. Libraries without source files are not supported because
-  # they are an indication that something has been misconfigured.
-  get_target_property(lib_imported ${zephyr_lib} IMPORTED)
-  get_target_property(lib_sources  ${zephyr_lib} SOURCES)
-  if(lib_sources STREQUAL lib_sources-NOTFOUND
-      AND (NOT (${zephyr_lib} STREQUAL ${IMAGE}app))
-      AND (NOT lib_imported)
-      )
-    # app is not checked because it's sources are added to it after
-    # this CMakeLists.txt file has been processed
-    message(FATAL_ERROR "\
-The Zephyr library '${zephyr_lib}' was created without source files. \
-Empty (non-imported) libraries are not supported. \
-Either make sure that the library has the sources it should have, \
-or make sure it is not created when it has no source files.")
-  endif()
 endforeach()
 
 get_property(OUTPUT_FORMAT        GLOBAL PROPERTY PROPERTY_OUTPUT_FORMAT)
@@ -783,7 +789,7 @@ construct_add_custom_command_for_linker_pass(
   custom_command
   ${ALIGN_SIZING_DEP}
   ${PRIV_STACK_DEP}
-  ${APP_SMEM_DEP}
+  ${APP_SMEM_ALIGNED_DEP}
   ${CODE_RELOCATION_DEP}
   ${OFFSETS_H_TARGET}
   )
@@ -1172,39 +1178,105 @@ zephyr_compile_options(
 )
 
 configure_file(
-     $ENV{ZEPHYR_BASE}/include/arch/arc/v2/app_data_alignment.ld
+     $ENV{ZEPHYR_BASE}/include/arch/common/app_data_alignment.ld
      ${PROJECT_BINARY_DIR}/include/generated/app_data_alignment.ld)
 
 configure_file(
-     $ENV{ZEPHYR_BASE}/include/arch/arm/cortex_m/scripts/app_smem.ld
+     $ENV{ZEPHYR_BASE}/include/linker/app_smem.ld
      ${PROJECT_BINARY_DIR}/include/generated/app_smem.ld)
 
-if(CONFIG_APP_SHARED_MEM AND CONFIG_USERSPACE)
-  set(APP_SMEM_LD "${PROJECT_BINARY_DIR}/include/generated/app_smem.ld")
+configure_file(
+     $ENV{ZEPHYR_BASE}/include/linker/app_smem_aligned.ld
+     ${PROJECT_BINARY_DIR}/include/generated/app_smem_aligned.ld)
+
+configure_file(
+     $ENV{ZEPHYR_BASE}/include/linker/app_smem_unaligned.ld
+     ${PROJECT_BINARY_DIR}/include/generated/app_smem_unaligned.ld)
+
+if(CONFIG_USERSPACE)
+  set(APP_SMEM_ALIGNED_LD "${PROJECT_BINARY_DIR}/include/generated/app_smem_aligned.ld")
+  set(APP_SMEM_UNALIGNED_LD "${PROJECT_BINARY_DIR}/include/generated/app_smem_unaligned.ld")
   set(OBJ_FILE_DIR "${PROJECT_BINARY_DIR}/../")
 
   add_custom_target(
-    ${APP_SMEM_DEP}
+    ${APP_SMEM_ALIGNED_DEP}
     DEPENDS
-    ${APP_SMEM_LD}
+    ${APP_SMEM_ALIGNED_LD}
+    )
+
+  add_custom_target(
+    ${APP_SMEM_UNALIGNED_DEP}
+    DEPENDS
+    ${APP_SMEM_UNALIGNED_LD}
     )
 
   if(CONFIG_NEWLIB_LIBC)
-    set(NEWLIB_PART -l libc.a z_newlib_partition)
+    set(NEWLIB_PART -l libc.a z_libc_partition)
   endif()
+  if(CONFIG_MBEDTLS)
+    set(MBEDTLS_PART -l libext__lib__crypto__mbedtls.a k_mbedtls_partition)
+  endif()
+
   add_custom_command(
-    OUTPUT ${APP_SMEM_LD}
+    OUTPUT ${APP_SMEM_UNALIGNED_LD}
     COMMAND ${PYTHON_EXECUTABLE}
     ${ZEPHYR_BASE}/scripts/gen_app_partitions.py
     -d ${OBJ_FILE_DIR}
-    -o ${APP_SMEM_LD}
-    ${NEWLIB_PART}
+    -o ${APP_SMEM_UNALIGNED_LD}
+    ${NEWLIB_PART} ${MBEDTLS_PART}
     $<$<BOOL:${CMAKE_VERBOSE_MAKEFILE}>:--verbose>
     DEPENDS
     ${KERNEL_LIBRARY}
     ${ZEPHYR_LIBS_PROPERTY}
     WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/
-    COMMENT "Generating app_smem linker section"
+    COMMENT "Generating app_smem_unaligned linker section"
+    )
+
+  construct_add_custom_command_for_linker_pass(
+    linker_app_smem_unaligned
+    custom_command
+    ${ALIGN_SIZING_DEP}
+    ${CODE_RELOCATION_DEP}
+    ${APP_SMEM_UNALIGNED_DEP}
+    ${APP_SMEM_UNALIGNED_LD}
+    ${OFFSETS_H_TARGET}
+    )
+  add_custom_command(
+    ${custom_command}
+    )
+
+  add_custom_target(
+    linker_app_smem_unaligned_script
+    DEPENDS
+    linker_app_smem_unaligned.cmd
+    )
+
+  set_property(TARGET
+    linker_app_smem_unaligned_script
+    PROPERTY INCLUDE_DIRECTORIES
+    ${ZEPHYR_INCLUDE_DIRS}
+    )
+
+  set(APP_SMEM_UNALIGNED_LIB app_smem_unaligned_output_obj_renamed_lib)
+  add_executable(       app_smem_unaligned_prebuilt misc/empty_file.c)
+  target_link_libraries(app_smem_unaligned_prebuilt ${TOPT} ${PROJECT_BINARY_DIR}/linker_app_smem_unaligned.cmd ${zephyr_lnk} ${CODE_RELOCATION_DEP})
+  set_property(TARGET   app_smem_unaligned_prebuilt PROPERTY LINK_DEPENDS ${PROJECT_BINARY_DIR}/linker_app_smem_unaligned.cmd)
+  add_dependencies(     app_smem_unaligned_prebuilt ${ALIGN_SIZING_DEP} linker_app_smem_unaligned_script ${OFFSETS_LIB})
+
+  add_custom_command(
+    OUTPUT ${APP_SMEM_ALIGNED_LD}
+    COMMAND ${PYTHON_EXECUTABLE}
+    ${ZEPHYR_BASE}/scripts/gen_app_partitions.py
+    -e $<TARGET_FILE:app_smem_unaligned_prebuilt>
+    -o ${APP_SMEM_ALIGNED_LD}
+    ${NEWLIB_PART} ${MBEDTLS_PART}
+    $<$<BOOL:${CMAKE_VERBOSE_MAKEFILE}>:--verbose>
+    DEPENDS
+    ${KERNEL_LIBRARY}
+    ${ZEPHYR_LIBS_PROPERTY}
+    app_smem_unaligned_prebuilt
+    WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/
+    COMMENT "Generating app_smem_aligned linker section"
     )
 endif()
 
@@ -1214,8 +1286,8 @@ if(CONFIG_USERSPACE AND CONFIG_ARM)
     custom_command
     ${ALIGN_SIZING_DEP}
     ${CODE_RELOCATION_DEP}
-    ${APP_SMEM_DEP}
-    ${APP_SMEM_LD}
+    ${APP_SMEM_ALIGNED_DEP}
+    ${APP_SMEM_ALIGNED_LD}
     ${OFFSETS_H_TARGET}
     )
   add_custom_command(
@@ -1460,7 +1532,6 @@ else()
 endif()
 
 add_subdirectory(cmake/flash)
-# TODO what to do about cmake/usage?
 add_subdirectory(cmake/reports)
 
 if(CONFIG_ASSERT AND (NOT CONFIG_FORCE_NO_ASSERT))

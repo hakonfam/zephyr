@@ -9,6 +9,7 @@
 #include <device.h>
 #include <entropy.h>
 #include <bluetooth/bluetooth.h>
+#include <misc/byteorder.h>
 
 #include "hal/ecb.h"
 #include "hal/ccm.h"
@@ -1139,9 +1140,9 @@ void ull_conn_tx_lll_enqueue(struct ll_conn *conn, u8_t count)
 
 	tx = conn->tx_head;
 #if defined(CONFIG_BT_CTLR_LE_ENC)
-	while (tx && ((tx == conn->tx_ctrl) || !conn->pause_tx) && count--) {
+	while (tx && (!conn->pause_tx || (tx == conn->tx_ctrl)) && count--) {
 #else /* !CONFIG_BT_CTLR_LE_ENC */
-	while (tx && (tx == conn->tx_ctrl) && count--) {
+	while (tx && count--) {
 #endif /* !CONFIG_BT_CTLR_LE_ENC */
 		struct node_tx *tx_lll;
 		memq_link_t *link;
@@ -1253,6 +1254,7 @@ static void ticker_op_update_cb(u32_t status, void *param)
 
 static void ticker_op_stop_cb(u32_t status, void *param)
 {
+	u32_t retval;
 	static memq_link_t link;
 	static struct mayfly mfy = {0, 0, &link, NULL, lll_conn_tx_flush};
 
@@ -1261,7 +1263,9 @@ static void ticker_op_stop_cb(u32_t status, void *param)
 	mfy.param = param;
 
 	/* Flush pending tx PDUs in LLL (using a mayfly) */
-	mayfly_enqueue(TICKER_USER_ID_ULL_LOW, TICKER_USER_ID_LLL, 1, &mfy);
+	retval = mayfly_enqueue(TICKER_USER_ID_ULL_LOW, TICKER_USER_ID_LLL, 1,
+				&mfy);
+	LL_ASSERT(!retval);
 }
 
 static inline void disable(u16_t handle)
@@ -1430,15 +1434,15 @@ static inline void event_conn_upd_init(struct ll_conn *conn,
 	pdu_ctrl_tx->llctrl.conn_update_ind.win_size =
 		conn->llcp.conn_upd.win_size;
 	pdu_ctrl_tx->llctrl.conn_update_ind.win_offset =
-		conn->llcp.conn_upd.win_offset_us / 1250;
+		sys_cpu_to_le16(conn->llcp.conn_upd.win_offset_us / 1250);
 	pdu_ctrl_tx->llctrl.conn_update_ind.interval =
-		conn->llcp.conn_upd.interval;
+		sys_cpu_to_le16(conn->llcp.conn_upd.interval);
 	pdu_ctrl_tx->llctrl.conn_update_ind.latency =
-		conn->llcp.conn_upd.latency;
+		sys_cpu_to_le16(conn->llcp.conn_upd.latency);
 	pdu_ctrl_tx->llctrl.conn_update_ind.timeout =
-		conn->llcp.conn_upd.timeout;
+		sys_cpu_to_le16(conn->llcp.conn_upd.timeout);
 	pdu_ctrl_tx->llctrl.conn_update_ind.instant =
-		conn->llcp.conn_upd.instant;
+		sys_cpu_to_le16(conn->llcp.conn_upd.instant);
 
 #if defined(CONFIG_BT_CTLR_SCHED_ADVANCED)
 	{
@@ -1794,7 +1798,7 @@ static inline void event_ch_map_prep(struct ll_conn *conn,
 			       &conn->llcp.chan_map.chm[0],
 			       sizeof(pdu_ctrl_tx->llctrl.chan_map_ind.chm));
 			pdu_ctrl_tx->llctrl.chan_map_ind.instant =
-				conn->llcp.chan_map.instant;
+				sys_cpu_to_le16(conn->llcp.chan_map.instant);
 
 			ctrl_tx_enqueue(conn, tx);
 		}
@@ -2037,6 +2041,8 @@ static inline void event_vex_prep(struct ll_conn *conn)
 		tx = mem_acquire(&mem_conn_tx_ctrl.free);
 		if (tx) {
 			struct pdu_data *pdu = (void *)tx->pdu;
+			u16_t cid;
+			u16_t svn;
 
 			/* procedure request acked */
 			conn->llcp_ack = conn->llcp_req;
@@ -2053,10 +2059,10 @@ static inline void event_vex_prep(struct ll_conn *conn)
 				PDU_DATA_LLCTRL_TYPE_VERSION_IND;
 			pdu->llctrl.version_ind.version_number =
 				LL_VERSION_NUMBER;
-			pdu->llctrl.version_ind.company_id =
-				CONFIG_BT_CTLR_COMPANY_ID;
-			pdu->llctrl.version_ind.sub_version_number =
-				CONFIG_BT_CTLR_SUBVERSION_NUMBER;
+			cid = sys_cpu_to_le16(CONFIG_BT_CTLR_COMPANY_ID);
+			svn = sys_cpu_to_le16(CONFIG_BT_CTLR_SUBVERSION_NUMBER);
+			pdu->llctrl.version_ind.company_id = cid;
+			pdu->llctrl.version_ind.sub_version_number = svn;
 
 			ctrl_tx_enqueue(conn, tx);
 
@@ -2090,9 +2096,9 @@ static inline void event_vex_prep(struct ll_conn *conn)
 		pdu->llctrl.version_ind.version_number =
 			conn->llcp_version.version_number;
 		pdu->llctrl.version_ind.company_id =
-			conn->llcp_version.company_id;
+			sys_cpu_to_le16(conn->llcp_version.company_id);
 		pdu->llctrl.version_ind.sub_version_number =
-			conn->llcp_version.sub_version_number;
+			sys_cpu_to_le16(conn->llcp_version.sub_version_number);
 
 		/* enqueue version ind structure into rx queue */
 		ll_rx_put(rx->hdr.link, rx);
@@ -2127,18 +2133,18 @@ static inline void event_conn_param_req(struct ll_conn *conn,
 		sizeof(struct pdu_data_llctrl_conn_param_req);
 	pdu_ctrl_tx->llctrl.opcode = PDU_DATA_LLCTRL_TYPE_CONN_PARAM_REQ;
 	p = (void *)&pdu_ctrl_tx->llctrl.conn_param_req;
-	p->interval_min = conn->llcp_conn_param.interval_min;
-	p->interval_max = conn->llcp_conn_param.interval_max;
-	p->latency = conn->llcp_conn_param.latency;
-	p->timeout = conn->llcp_conn_param.timeout;
+	p->interval_min = sys_cpu_to_le16(conn->llcp_conn_param.interval_min);
+	p->interval_max = sys_cpu_to_le16(conn->llcp_conn_param.interval_max);
+	p->latency = sys_cpu_to_le16(conn->llcp_conn_param.latency);
+	p->timeout = sys_cpu_to_le16(conn->llcp_conn_param.timeout);
 	p->preferred_periodicity = 0;
-	p->reference_conn_event_count = event_counter;
-	p->offset0 = 0x0000;
-	p->offset1 = 0xffff;
-	p->offset2 = 0xffff;
-	p->offset3 = 0xffff;
-	p->offset4 = 0xffff;
-	p->offset5 = 0xffff;
+	p->reference_conn_event_count = sys_cpu_to_le16(event_counter);
+	p->offset0 = sys_cpu_to_le16(0x0000);
+	p->offset1 = sys_cpu_to_le16(0xffff);
+	p->offset2 = sys_cpu_to_le16(0xffff);
+	p->offset3 = sys_cpu_to_le16(0xffff);
+	p->offset4 = sys_cpu_to_le16(0xffff);
+	p->offset5 = sys_cpu_to_le16(0xffff);
 
 	ctrl_tx_enqueue(conn, tx);
 
@@ -2268,20 +2274,24 @@ static inline void event_conn_param_rsp(struct ll_conn *conn)
 		sizeof(struct pdu_data_llctrl_conn_param_rsp);
 	pdu->llctrl.opcode = PDU_DATA_LLCTRL_TYPE_CONN_PARAM_RSP;
 	rsp = (void *)&pdu->llctrl.conn_param_rsp;
-	rsp->interval_min = conn->llcp_conn_param.interval_min;
-	rsp->interval_max = conn->llcp_conn_param.interval_max;
-	rsp->latency = conn->llcp_conn_param.latency;
-	rsp->timeout = conn->llcp_conn_param.timeout;
+	rsp->interval_min =
+		sys_cpu_to_le16(conn->llcp_conn_param.interval_min);
+	rsp->interval_max =
+		sys_cpu_to_le16(conn->llcp_conn_param.interval_max);
+	rsp->latency =
+		sys_cpu_to_le16(conn->llcp_conn_param.latency);
+	rsp->timeout =
+		sys_cpu_to_le16(conn->llcp_conn_param.timeout);
 	rsp->preferred_periodicity =
 		conn->llcp_conn_param.preferred_periodicity;
 	rsp->reference_conn_event_count =
-		conn->llcp_conn_param.reference_conn_event_count;
-	rsp->offset0 = conn->llcp_conn_param.offset0;
-	rsp->offset1 = conn->llcp_conn_param.offset1;
-	rsp->offset2 = conn->llcp_conn_param.offset2;
-	rsp->offset3 = conn->llcp_conn_param.offset3;
-	rsp->offset4 = conn->llcp_conn_param.offset4;
-	rsp->offset5 = conn->llcp_conn_param.offset5;
+		sys_cpu_to_le16(conn->llcp_conn_param.reference_conn_event_count);
+	rsp->offset0 = sys_cpu_to_le16(conn->llcp_conn_param.offset0);
+	rsp->offset1 = sys_cpu_to_le16(conn->llcp_conn_param.offset1);
+	rsp->offset2 = sys_cpu_to_le16(conn->llcp_conn_param.offset2);
+	rsp->offset3 = sys_cpu_to_le16(conn->llcp_conn_param.offset3);
+	rsp->offset4 = sys_cpu_to_le16(conn->llcp_conn_param.offset4);
+	rsp->offset5 = sys_cpu_to_le16(conn->llcp_conn_param.offset5);
 
 	ctrl_tx_enqueue(conn, tx);
 
@@ -2325,10 +2335,10 @@ static inline void event_conn_param_app_req(struct ll_conn *conn)
 		sizeof(struct pdu_data_llctrl_conn_param_req);
 	pdu->llctrl.opcode = PDU_DATA_LLCTRL_TYPE_CONN_PARAM_REQ;
 	p = (void *) &pdu->llctrl.conn_param_req;
-	p->interval_min = conn->llcp_conn_param.interval_min;
-	p->interval_max = conn->llcp_conn_param.interval_max;
-	p->latency = conn->llcp_conn_param.latency;
-	p->timeout = conn->llcp_conn_param.timeout;
+	p->interval_min = sys_cpu_to_le16(conn->llcp_conn_param.interval_min);
+	p->interval_max = sys_cpu_to_le16(conn->llcp_conn_param.interval_max);
+	p->latency = sys_cpu_to_le16(conn->llcp_conn_param.latency);
+	p->timeout = sys_cpu_to_le16(conn->llcp_conn_param.timeout);
 
 	/* enqueue connection parameter request into rx queue */
 	ll_rx_put(rx->hdr.link, rx);
@@ -2809,7 +2819,7 @@ static inline void event_phy_upd_ind_prep(struct ll_conn *conn,
 		ind = &pdu_ctrl_tx->llctrl.phy_upd_ind;
 		ind->m_to_s_phy = conn->llcp.phy_upd_ind.tx;
 		ind->s_to_m_phy = conn->llcp.phy_upd_ind.rx;
-		ind->instant = conn->llcp.phy_upd_ind.instant;
+		ind->instant = sys_cpu_to_le16(conn->llcp.phy_upd_ind.instant);
 
 		ctrl_tx_enqueue(conn, tx);
 	} else if (((event_counter - conn->llcp.phy_upd_ind.instant) & 0xFFFF)
@@ -2863,8 +2873,10 @@ static inline void event_phy_upd_ind_prep(struct ll_conn *conn,
 static u8_t conn_upd_recv(struct ll_conn *conn, memq_link_t *link,
 			  struct node_rx_pdu **rx, struct pdu_data *pdu)
 {
-	if (((pdu->llctrl.conn_update_ind.instant - conn->lll.event_counter) &
-	     0xFFFF) > 0x7FFF) {
+	u16_t instant;
+
+	instant = sys_le16_to_cpu(pdu->llctrl.conn_update_ind.instant);
+	if (((instant - conn->lll.event_counter) & 0xFFFF) > 0x7FFF) {
 		/* Mark for buffer for release */
 		(*rx)->hdr.type = NODE_RX_TYPE_DC_PDU_RELEASE;
 
@@ -2890,11 +2902,14 @@ static u8_t conn_upd_recv(struct ll_conn *conn, memq_link_t *link,
 
 	conn->llcp.conn_upd.win_size = pdu->llctrl.conn_update_ind.win_size;
 	conn->llcp.conn_upd.win_offset_us =
-		pdu->llctrl.conn_update_ind.win_offset * 1250;
-	conn->llcp.conn_upd.interval = pdu->llctrl.conn_update_ind.interval;
-	conn->llcp.conn_upd.latency = pdu->llctrl.conn_update_ind.latency;
-	conn->llcp.conn_upd.timeout = pdu->llctrl.conn_update_ind.timeout;
-	conn->llcp.conn_upd.instant = pdu->llctrl.conn_update_ind.instant;
+		sys_le16_to_cpu(pdu->llctrl.conn_update_ind.win_offset) * 1250;
+	conn->llcp.conn_upd.interval =
+		sys_le16_to_cpu(pdu->llctrl.conn_update_ind.interval);
+	conn->llcp.conn_upd.latency =
+		sys_le16_to_cpu(pdu->llctrl.conn_update_ind.latency);
+	conn->llcp.conn_upd.timeout =
+		sys_le16_to_cpu(pdu->llctrl.conn_update_ind.timeout);
+	conn->llcp.conn_upd.instant = instant;
 	conn->llcp.conn_upd.state = LLCP_CUI_STATE_INPROG;
 	conn->llcp.conn_upd.is_internal = 0;
 
@@ -2921,9 +2936,10 @@ static u8_t chan_map_upd_recv(struct ll_conn *conn, struct node_rx_pdu *rx,
 			      struct pdu_data *pdu)
 {
 	u8_t err = 0;
+	u16_t instant;
 
-	if (((pdu->llctrl.chan_map_ind.instant - conn->lll.event_counter) &
-	     0xffff) > 0x7fff) {
+	instant = sys_le16_to_cpu(pdu->llctrl.chan_map_ind.instant);
+	if (((instant - conn->lll.event_counter) & 0xffff) > 0x7fff) {
 		err = BT_HCI_ERR_INSTANT_PASSED;
 
 		goto chan_map_upd_recv_exit;
@@ -2939,7 +2955,7 @@ static u8_t chan_map_upd_recv(struct ll_conn *conn, struct node_rx_pdu *rx,
 
 	memcpy(&conn->llcp.chan_map.chm[0], &pdu->llctrl.chan_map_ind.chm[0],
 	       sizeof(conn->llcp.chan_map.chm));
-	conn->llcp.chan_map.instant = pdu->llctrl.chan_map_ind.instant;
+	conn->llcp.chan_map.instant = instant;
 	conn->llcp.chan_map.initiate = 0;
 
 	conn->llcp_type = LLCP_CHAN_MAP;
@@ -3111,6 +3127,13 @@ static inline bool ctrl_is_unexpected(struct ll_conn *conn, u8_t opcode)
 		  (opcode != PDU_DATA_LLCTRL_TYPE_REJECT_EXT_IND)))) ||
 	       (conn->lll.role &&
 		((!conn->refresh &&
+		  /* As a workaround to IOP with some old peer controllers that
+		   * respond with Unknown Rsp PDU to our local Slave Initiated
+		   * Feature request during Encryption Setup initiated by the
+		   * peer, we accept this Unknown Rsp PDU during the Encryption
+		   * setup procedure in progress.
+		   */
+		  (opcode != PDU_DATA_LLCTRL_TYPE_UNKNOWN_RSP) &&
 		  (opcode != PDU_DATA_LLCTRL_TYPE_TERMINATE_IND) &&
 		  (opcode != PDU_DATA_LLCTRL_TYPE_START_ENC_RSP) &&
 		  (opcode != PDU_DATA_LLCTRL_TYPE_REJECT_IND) &&
@@ -3299,8 +3322,9 @@ static int version_ind_send(struct ll_conn *conn, struct node_rx_pdu *rx,
 		pdu_tx->llctrl.opcode = PDU_DATA_LLCTRL_TYPE_VERSION_IND;
 		v = &pdu_tx->llctrl.version_ind;
 		v->version_number = LL_VERSION_NUMBER;
-		v->company_id =	CONFIG_BT_CTLR_COMPANY_ID;
-		v->sub_version_number =	CONFIG_BT_CTLR_SUBVERSION_NUMBER;
+		v->company_id =	sys_cpu_to_le16(CONFIG_BT_CTLR_COMPANY_ID);
+		v->sub_version_number =
+			sys_cpu_to_le16(CONFIG_BT_CTLR_SUBVERSION_NUMBER);
 
 		ctrl_tx_sec_enqueue(conn, tx);
 
@@ -3320,8 +3344,9 @@ static int version_ind_send(struct ll_conn *conn, struct node_rx_pdu *rx,
 
 	v = &pdu_rx->llctrl.version_ind;
 	conn->llcp_version.version_number = v->version_number;
-	conn->llcp_version.company_id = v->company_id;
-	conn->llcp_version.sub_version_number = v->sub_version_number;
+	conn->llcp_version.company_id = sys_le16_to_cpu(v->company_id);
+	conn->llcp_version.sub_version_number =
+		sys_le16_to_cpu(v->sub_version_number);
 	conn->llcp_version.rx = 1;
 
 	return 0;
@@ -3629,6 +3654,7 @@ static inline u8_t phy_upd_ind_recv(struct ll_conn *conn, memq_link_t *link,
 				    struct pdu_data *pdu_rx)
 {
 	struct pdu_data_llctrl_phy_upd_ind *ind = &pdu_rx->llctrl.phy_upd_ind;
+	u16_t instant;
 
 	/* Both tx and rx PHY unchanged */
 	if (!((ind->m_to_s_phy | ind->s_to_m_phy) & 0x07)) {
@@ -3667,7 +3693,8 @@ static inline u8_t phy_upd_ind_recv(struct ll_conn *conn, memq_link_t *link,
 	}
 
 	/* instant passed */
-	if (((ind->instant - conn->lll.event_counter) & 0xffff) > 0x7fff) {
+	instant = sys_le16_to_cpu(ind->instant);
+	if (((instant - conn->lll.event_counter) & 0xffff) > 0x7fff) {
 		/* Mark for buffer for release */
 		(*rx)->hdr.type = NODE_RX_TYPE_DC_PDU_RELEASE;
 
@@ -3693,7 +3720,7 @@ static inline u8_t phy_upd_ind_recv(struct ll_conn *conn, memq_link_t *link,
 
 	conn->llcp.phy_upd_ind.tx = ind->s_to_m_phy;
 	conn->llcp.phy_upd_ind.rx = ind->m_to_s_phy;
-	conn->llcp.phy_upd_ind.instant = ind->instant;
+	conn->llcp.phy_upd_ind.instant = instant;
 	conn->llcp.phy_upd_ind.initiate = 0;
 
 	LL_ASSERT(!conn->llcp_rx);
@@ -4230,18 +4257,28 @@ static inline int ctrl_rx(memq_link_t *link, struct node_rx_pdu **rx,
 					&pdu_rx->llctrl.conn_param_req;
 				struct lll_conn *lll = &conn->lll;
 
+				/* Extract parameters */
+				u16_t interval_min =
+					sys_le16_to_cpu(cpr->interval_min);
+				u16_t interval_max =
+					sys_le16_to_cpu(cpr->interval_max);
+				u16_t latency =
+					sys_le16_to_cpu(cpr->latency);
+				u16_t timeout =
+					sys_le16_to_cpu(cpr->timeout);
+				u16_t preferred_periodicity =
+					cpr->preferred_periodicity;
+
 				/* Invalid parameters */
-				if ((cpr->interval_min < 6) ||
-				    (cpr->interval_max > 3200) ||
-				    (cpr->interval_min > cpr->interval_max) ||
-				    (cpr->latency > 499) ||
-				    (cpr->timeout < 10) ||
-				    (cpr->timeout > 3200) ||
-				    ((cpr->timeout * 4) <=
-				     ((cpr->latency + 1) *
-				      cpr->interval_max)) ||
-				    (cpr->preferred_periodicity >
-				     cpr->interval_max)) {
+				if ((interval_min < 6) ||
+				    (interval_max > 3200) ||
+				    (interval_min > interval_max) ||
+				    (latency > 499) ||
+				    (timeout < 10) ||
+				    (timeout > 3200) ||
+				    ((timeout * 4) <=
+				     ((latency + 1) * interval_max)) ||
+				    (preferred_periodicity > interval_max)) {
 					nack = reject_ext_ind_send(conn, *rx,
 						PDU_DATA_LLCTRL_TYPE_CONN_PARAM_REQ,
 						BT_HCI_ERR_INVALID_LL_PARAM);
@@ -4251,21 +4288,27 @@ static inline int ctrl_rx(memq_link_t *link, struct node_rx_pdu **rx,
 				/* save parameters to be used to select offset
 				 */
 				conn->llcp_conn_param.interval_min =
-					cpr->interval_min;
+					interval_min;
 				conn->llcp_conn_param.interval_max =
-					cpr->interval_max;
-				conn->llcp_conn_param.latency =	cpr->latency;
-				conn->llcp_conn_param.timeout =	cpr->timeout;
+					interval_max;
+				conn->llcp_conn_param.latency =	latency;
+				conn->llcp_conn_param.timeout =	timeout;
 				conn->llcp_conn_param.preferred_periodicity =
-					cpr->preferred_periodicity;
+					preferred_periodicity;
 				conn->llcp_conn_param.reference_conn_event_count =
-					cpr->reference_conn_event_count;
-				conn->llcp_conn_param.offset0 =	cpr->offset0;
-				conn->llcp_conn_param.offset1 =	cpr->offset1;
-				conn->llcp_conn_param.offset2 =	cpr->offset2;
-				conn->llcp_conn_param.offset3 =	cpr->offset3;
-				conn->llcp_conn_param.offset4 =	cpr->offset4;
-				conn->llcp_conn_param.offset5 =	cpr->offset5;
+					sys_le16_to_cpu(cpr->reference_conn_event_count);
+				conn->llcp_conn_param.offset0 =
+					sys_le16_to_cpu(cpr->offset0);
+				conn->llcp_conn_param.offset1 =
+					sys_le16_to_cpu(cpr->offset1);
+				conn->llcp_conn_param.offset2 =
+					sys_le16_to_cpu(cpr->offset2);
+				conn->llcp_conn_param.offset3 =
+					sys_le16_to_cpu(cpr->offset3);
+				conn->llcp_conn_param.offset4 =
+					sys_le16_to_cpu(cpr->offset4);
+				conn->llcp_conn_param.offset5 =
+					sys_le16_to_cpu(cpr->offset5);
 
 				/* enqueue the conn param req, if parameters
 				 * changed, else respond.
@@ -4323,15 +4366,23 @@ static inline int ctrl_rx(memq_link_t *link, struct node_rx_pdu **rx,
 				&pdu_rx->llctrl.conn_param_req;
 			struct lll_conn *lll = &conn->lll;
 
+			/* Extract parameters */
+			u16_t interval_min = sys_le16_to_cpu(cpr->interval_min);
+			u16_t interval_max = sys_le16_to_cpu(cpr->interval_max);
+			u16_t latency = sys_le16_to_cpu(cpr->latency);
+			u16_t timeout = sys_le16_to_cpu(cpr->timeout);
+			u16_t preferred_periodicity =
+				cpr->preferred_periodicity;
+
 			/* Invalid parameters */
-			if ((cpr->interval_min < 6) ||
-			    (cpr->interval_max > 3200) ||
-			    (cpr->interval_min > cpr->interval_max) ||
-			    (cpr->latency > 499) ||
-			    (cpr->timeout < 10) || (cpr->timeout > 3200) ||
-			    ((cpr->timeout * 4) <= ((cpr->latency + 1) *
-						    cpr->interval_max)) ||
-			    (cpr->preferred_periodicity > cpr->interval_max)) {
+			if ((interval_min < 6) ||
+			    (interval_max > 3200) ||
+			    (interval_min > interval_max) ||
+			    (latency > 499) ||
+			    (timeout < 10) || (timeout > 3200) ||
+			    ((timeout * 4) <=
+			     ((latency + 1) * interval_max)) ||
+			    (preferred_periodicity > interval_max)) {
 				nack = reject_ext_ind_send(conn, *rx,
 					PDU_DATA_LLCTRL_TYPE_CONN_PARAM_REQ,
 					BT_HCI_ERR_INVALID_LL_PARAM);
@@ -4341,20 +4392,26 @@ static inline int ctrl_rx(memq_link_t *link, struct node_rx_pdu **rx,
 			/* resp to be generated by app, for now save
 			 * parameters
 			 */
-			conn->llcp_conn_param.interval_min = cpr->interval_min;
-			conn->llcp_conn_param.interval_max = cpr->interval_max;
-			conn->llcp_conn_param.latency =	cpr->latency;
-			conn->llcp_conn_param.timeout =	cpr->timeout;
+			conn->llcp_conn_param.interval_min = interval_min;
+			conn->llcp_conn_param.interval_max = interval_max;
+			conn->llcp_conn_param.latency =	latency;
+			conn->llcp_conn_param.timeout =	timeout;
 			conn->llcp_conn_param.preferred_periodicity =
-				cpr->preferred_periodicity;
+				preferred_periodicity;
 			conn->llcp_conn_param.reference_conn_event_count =
-				cpr->reference_conn_event_count;
-			conn->llcp_conn_param.offset0 =	cpr->offset0;
-			conn->llcp_conn_param.offset1 =	cpr->offset1;
-			conn->llcp_conn_param.offset2 =	cpr->offset2;
-			conn->llcp_conn_param.offset3 =	cpr->offset3;
-			conn->llcp_conn_param.offset4 =	cpr->offset4;
-			conn->llcp_conn_param.offset5 =	cpr->offset5;
+				sys_le16_to_cpu(cpr->reference_conn_event_count);
+			conn->llcp_conn_param.offset0 =
+				sys_le16_to_cpu(cpr->offset0);
+			conn->llcp_conn_param.offset1 =
+				sys_le16_to_cpu(cpr->offset1);
+			conn->llcp_conn_param.offset2 =
+				sys_le16_to_cpu(cpr->offset2);
+			conn->llcp_conn_param.offset3 =
+				sys_le16_to_cpu(cpr->offset3);
+			conn->llcp_conn_param.offset4 =
+				sys_le16_to_cpu(cpr->offset4);
+			conn->llcp_conn_param.offset5 =
+				sys_le16_to_cpu(cpr->offset5);
 
 			/* enqueue the conn param req, if parameters changed,
 			 * else respond
@@ -4405,15 +4462,23 @@ static inline int ctrl_rx(memq_link_t *link, struct node_rx_pdu **rx,
 			struct pdu_data_llctrl_conn_param_req *cpr = (void *)
 				&pdu_rx->llctrl.conn_param_req;
 
+			/* Extract parameters */
+			u16_t interval_min = sys_le16_to_cpu(cpr->interval_min);
+			u16_t interval_max = sys_le16_to_cpu(cpr->interval_max);
+			u16_t latency = sys_le16_to_cpu(cpr->latency);
+			u16_t timeout = sys_le16_to_cpu(cpr->timeout);
+			u16_t preferred_periodicity =
+				cpr->preferred_periodicity;
+
 			/* Invalid parameters */
-			if ((cpr->interval_min < 6) ||
-			    (cpr->interval_max > 3200) ||
-			    (cpr->interval_min > cpr->interval_max) ||
-			    (cpr->latency > 499) ||
-			    (cpr->timeout < 10) || (cpr->timeout > 3200) ||
-			    ((cpr->timeout * 4) <= ((cpr->latency + 1) *
-						    cpr->interval_max)) ||
-			    (cpr->preferred_periodicity > cpr->interval_max)) {
+			if ((interval_min < 6) ||
+			    (interval_max > 3200) ||
+			    (interval_min > interval_max) ||
+			    (latency > 499) ||
+			    (timeout < 10) || (timeout > 3200) ||
+			    ((timeout * 4) <=
+			     ((latency + 1) * interval_max)) ||
+			    (preferred_periodicity > interval_max)) {
 				nack = reject_ext_ind_send(conn, *rx,
 					PDU_DATA_LLCTRL_TYPE_CONN_PARAM_RSP,
 					BT_HCI_ERR_INVALID_LL_PARAM);
@@ -4425,20 +4490,26 @@ static inline int ctrl_rx(memq_link_t *link, struct node_rx_pdu **rx,
 
 			/* save parameters to be used to select offset
 			 */
-			conn->llcp_conn_param.interval_min = cpr->interval_min;
-			conn->llcp_conn_param.interval_max = cpr->interval_max;
-			conn->llcp_conn_param.latency =	cpr->latency;
-			conn->llcp_conn_param.timeout =	cpr->timeout;
+			conn->llcp_conn_param.interval_min = interval_min;
+			conn->llcp_conn_param.interval_max = interval_max;
+			conn->llcp_conn_param.latency =	latency;
+			conn->llcp_conn_param.timeout =	timeout;
 			conn->llcp_conn_param.preferred_periodicity =
-				cpr->preferred_periodicity;
+				preferred_periodicity;
 			conn->llcp_conn_param.reference_conn_event_count =
-				cpr->reference_conn_event_count;
-			conn->llcp_conn_param.offset0 =	cpr->offset0;
-			conn->llcp_conn_param.offset1 =	cpr->offset1;
-			conn->llcp_conn_param.offset2 =	cpr->offset2;
-			conn->llcp_conn_param.offset3 =	cpr->offset3;
-			conn->llcp_conn_param.offset4 =	cpr->offset4;
-			conn->llcp_conn_param.offset5 =	cpr->offset5;
+				sys_le16_to_cpu(cpr->reference_conn_event_count);
+			conn->llcp_conn_param.offset0 =
+				sys_le16_to_cpu(cpr->offset0);
+			conn->llcp_conn_param.offset1 =
+				sys_le16_to_cpu(cpr->offset1);
+			conn->llcp_conn_param.offset2 =
+				sys_le16_to_cpu(cpr->offset2);
+			conn->llcp_conn_param.offset3 =
+				sys_le16_to_cpu(cpr->offset3);
+			conn->llcp_conn_param.offset4 =
+				sys_le16_to_cpu(cpr->offset4);
+			conn->llcp_conn_param.offset5 =
+				sys_le16_to_cpu(cpr->offset5);
 
 			/* Perform connection update */
 			conn->llcp_conn_param.state = LLCP_CPR_STATE_RSP;

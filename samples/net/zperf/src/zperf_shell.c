@@ -989,11 +989,22 @@ static int cmd_connectap(const struct shell *shell, size_t argc, char *argv[])
 	return 0;
 }
 
+static bool tcp_running;
+
+void zperf_tcp_stopped(void)
+{
+	tcp_running = false;
+}
+
+void zperf_tcp_started(void)
+{
+	tcp_running = true;
+}
+
 static int cmd_tcp_download(const struct shell *shell, size_t argc,
 			    char *argv[])
 {
 	if (IS_ENABLED(CONFIG_NET_TCP)) {
-		static bool tcp_stopped = true;
 		int port;
 
 		do_init(shell);
@@ -1004,15 +1015,13 @@ static int cmd_tcp_download(const struct shell *shell, size_t argc,
 			port = DEF_PORT;
 		}
 
-		if (!tcp_stopped) {
+		if (tcp_running) {
 			shell_fprintf(shell, SHELL_WARNING,
 				      "TCP server already started!\n");
 			return -ENOEXEC;
 		}
 
 		zperf_tcp_receiver_init(shell, port);
-
-		tcp_stopped = false;
 
 		shell_fprintf(shell, SHELL_NORMAL,
 			      "TCP server started on port %u\n", port);
@@ -1095,8 +1104,7 @@ static void zperf_init(const struct shell *shell)
 	zperf_session_init();
 }
 
-SHELL_CREATE_STATIC_SUBCMD_SET(zperf_cmd_tcp)
-{
+SHELL_STATIC_SUBCMD_SET_CREATE(zperf_cmd_tcp,
 	SHELL_CMD(upload, NULL,
 		  "<dest ip> <dest port> <duration> <packet size>[K]\n"
 		  "<dest ip>     IP destination\n"
@@ -1130,10 +1138,9 @@ SHELL_CREATE_STATIC_SUBCMD_SET(zperf_cmd_tcp)
 		  "Example: tcp download 5001\n",
 		  cmd_tcp_download),
 	SHELL_SUBCMD_SET_END
-};
+);
 
-SHELL_CREATE_STATIC_SUBCMD_SET(zperf_cmd_udp)
-{
+SHELL_STATIC_SUBCMD_SET_CREATE(zperf_cmd_udp,
 	SHELL_CMD(upload, NULL,
 		  "<dest ip> [<dest port> <duration> <packet size>[K] "
 							"<baud rate>[K|M]]\n"
@@ -1170,10 +1177,9 @@ SHELL_CREATE_STATIC_SUBCMD_SET(zperf_cmd_udp)
 		  "Example: udp download 5001\n",
 		  cmd_udp_download),
 	SHELL_SUBCMD_SET_END
-};
+);
 
-SHELL_CREATE_STATIC_SUBCMD_SET(zperf_commands)
-{
+SHELL_STATIC_SUBCMD_SET_CREATE(zperf_commands,
 	SHELL_CMD(connectap, NULL,
 		  "Connect to AP",
 		  cmd_connectap),
@@ -1193,7 +1199,7 @@ SHELL_CREATE_STATIC_SUBCMD_SET(zperf_commands)
 		  "Zperf version",
 		  cmd_version),
 	SHELL_SUBCMD_SET_END
-};
+);
 
 SHELL_CMD_REGISTER(zperf, &zperf_commands, "Zperf commands", NULL);
 

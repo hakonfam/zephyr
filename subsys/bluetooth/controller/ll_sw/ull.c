@@ -116,10 +116,17 @@ static struct k_sem *sem_recv;
 /* Entropy device */
 static struct device *dev_entropy;
 
-/* prepare and done event FIFOs */
+/* Declare prepare-event FIFO: mfifo_prep: Queue of struct node_rx_event_done */
 static MFIFO_DEFINE(prep, sizeof(struct lll_event), EVENT_PIPELINE_MAX);
-static MFIFO_DEFINE(done, sizeof(void *), EVENT_PIPELINE_MAX);
 
+/* Declare done-event FIFO: mfifo_done.
+ * Queue of pointers to struct node_rx_event_done.
+ * The actual backing behind these pointers is mem_done
+ */
+static MFIFO_DEFINE(done, sizeof(struct node_rx_event_done *),
+							EVENT_PIPELINE_MAX);
+
+/* Backing storage for elements in mfifo_done */
 static struct {
 	void *free;
 	u8_t pool[sizeof(struct node_rx_event_done) * EVENT_PIPELINE_MAX];
@@ -137,25 +144,28 @@ static struct {
 static MFIFO_DEFINE(pdu_rx_free, sizeof(void *), PDU_RX_CNT);
 static MFIFO_DEFINE(ll_pdu_rx_free, sizeof(void *), LL_PDU_RX_CNT);
 
-#define PDU_RX_SIZE_MIN MROUND(offsetof(struct node_rx_pdu, pdu) + \
-			       sizeof(struct node_rx_ftr) + \
-			       (PDU_AC_SIZE_MAX + PDU_AC_SIZE_EXTRA))
-
 #if defined(CONFIG_BT_RX_BUF_LEN)
 #define PDU_RX_OCTETS_MAX (CONFIG_BT_RX_BUF_LEN - 11)
 #else
 #define PDU_RX_OCTETS_MAX 0
 #endif
 
-#define PDU_RX_POOL_SIZE (MROUND(offsetof(struct node_rx_pdu, pdu) + \
-				 sizeof(struct node_rx_ftr) + \
-				 max((PDU_AC_SIZE_MAX + PDU_AC_SIZE_EXTRA), \
-				     (offsetof(struct pdu_data, lldata) + \
-				      PDU_RX_OCTETS_MAX))) * RX_CNT)
+#define NODE_RX_HEADER_SIZE      (offsetof(struct node_rx_pdu, pdu))
+#define NODE_RX_FOOTER_SIZE      (sizeof(struct node_rx_ftr))
+#define NODE_RX_STRUCT_OVERHEAD  (NODE_RX_HEADER_SIZE + NODE_RX_FOOTER_SIZE)
+
+#define PDU_ADVERTIZE_SIZE       (PDU_AC_SIZE_MAX + PDU_AC_SIZE_EXTRA)
+#define PDU_DATA_SIZE            (PDU_DC_LL_HEADER_SIZE  + PDU_RX_OCTETS_MAX)
+
+#define PDU_RX_NODE_POOL_ELEMENT_SIZE                      \
+	MROUND(                                            \
+		NODE_RX_STRUCT_OVERHEAD                    \
+		+ MAX(PDU_ADVERTIZE_SIZE, PDU_DATA_SIZE)   \
+	)
+
+#define PDU_RX_POOL_SIZE (PDU_RX_NODE_POOL_ELEMENT_SIZE * (RX_CNT + 1))
 
 static struct {
-	u16_t size; /* Runtime (re)sized info */
-
 	void *free;
 	u8_t pool[PDU_RX_POOL_SIZE];
 } mem_pdu_rx;
@@ -169,7 +179,7 @@ static struct {
 #define LINK_RX_POOL_SIZE (sizeof(memq_link_t) * (RX_CNT + 2 + \
 						  BT_CTLR_MAX_CONN))
 static struct {
-	u8_t quota_pdu;
+	u8_t quota_pdu; /* Number of un-utilized buffers */
 
 	void *free;
 	u8_t pool[LINK_RX_POOL_SIZE];
@@ -352,6 +362,12 @@ void ll_reset(void)
 	LL_ASSERT(!err);
 }
 
+/**
+ * @brief Peek the next node_rx to send up to Host
+ * @details Tightly coupled with prio_recv_thread()
+ *   Execution context: Controller thread
+ * @return TX completed
+ */
 u8_t ll_rx_get(void **node_rx, u16_t *handle)
 {
 	struct node_rx_hdr *rx;
@@ -379,6 +395,9 @@ ll_rx_get_again:
 			} while ((cmplt_prev != 0) ||
 				 (cmplt_prev != cmplt_curr));
 
+			/* Do not send up buffers to Host thread that are
+			 * marked for release
+			 */
 			if (rx->type == NODE_RX_TYPE_DC_PDU_RELEASE) {
 				(void)memq_dequeue(memq_ll_rx.tail,
 						   &memq_ll_rx.head, NULL);
@@ -411,6 +430,10 @@ ll_rx_get_again:
 	return cmplt;
 }
 
+/**
+ * @brief Commit the dequeue from memq_ll_rx, where ll_rx_get() did the peek
+ * @details Execution context: Controller thread
+ */
 void ll_rx_dequeue(void)
 {
 	struct node_rx_hdr *rx = NULL;
@@ -498,6 +521,13 @@ void ll_rx_dequeue(void)
 	case NODE_RX_TYPE_MESH_REPORT:
 #endif /* CONFIG_BT_HCI_MESH_EXT */
 
+		/*
+		 * We have just dequeued from memq_ll_rx; that frees up some
+		 * quota for Link Layer. Note that we threw away the rx node
+		 * we have just dequeued from memq_ll_rx. But, this is OK,
+		 * since prio_recv_thread() peeked in memq_ll_rx via
+		 * ll_rx_get() before.
+		 */
 		LL_ASSERT(mem_link_rx.quota_pdu < RX_CNT);
 
 		mem_link_rx.quota_pdu++;
@@ -804,8 +834,15 @@ void ll_rx_put(memq_link_t *link, void *rx)
 	memq_enqueue(link, rx, &memq_ll_rx.tail);
 }
 
+/**
+ * @brief Permit another loop in the controller thread (prio_recv_thread)
+ * @details Execution context: ULL mayfly
+ */
 void ll_rx_sched(void)
 {
+	/* sem_recv references the same semaphore (sem_prio_recv)
+	 * in prio_recv_thread
+	 */
 	k_sem_give(sem_recv);
 }
 
@@ -1010,24 +1047,33 @@ void *ull_event_done_extra_get(void)
 
 void *ull_event_done(void *param)
 {
-	struct node_rx_event_done *done;
+	struct node_rx_event_done *evdone;
 	memq_link_t *link;
 
-	done = MFIFO_DEQUEUE(done);
-	if (!done) {
+	/* Obtain new node that signals "Done of an RX-event".
+	 * Obtain this by dequeuing from the global 'mfifo_done' queue.
+	 * Note that 'mfifo_done' is a queue of pointers, not of
+	 * struct node_rx_event_done
+	 */
+	evdone = MFIFO_DEQUEUE(done);
+	if (!evdone) {
+		/* Not fatal if we can not obtain node, though
+		 * we will loose the packets in software stack.
+		 * If this happens during Conn Upd, this could cause LSTO
+		 */
 		return NULL;
 	}
 
-	link = done->hdr.link;
-	done->hdr.link = NULL;
+	link = evdone->hdr.link;
+	evdone->hdr.link = NULL;
 
-	done->hdr.type = NODE_RX_TYPE_EVENT_DONE;
-	done->param = param;
+	evdone->hdr.type = NODE_RX_TYPE_EVENT_DONE;
+	evdone->param = param;
 
-	ull_rx_put(link, done);
+	ull_rx_put(link, evdone);
 	ull_rx_sched();
 
-	return done;
+	return evdone;
 }
 
 u8_t ull_entropy_get(u8_t len, u8_t *rand)
@@ -1051,9 +1097,8 @@ static inline int init_reset(void)
 	done_alloc();
 
 	/* Initialize rx pool. */
-	mem_pdu_rx.size = PDU_RX_SIZE_MIN;
-	mem_init(mem_pdu_rx.pool, mem_pdu_rx.size,
-		 sizeof(mem_pdu_rx.pool) / mem_pdu_rx.size,
+	mem_init(mem_pdu_rx.pool, (PDU_RX_NODE_POOL_ELEMENT_SIZE),
+		 sizeof(mem_pdu_rx.pool) / (PDU_RX_NODE_POOL_ELEMENT_SIZE),
 		 &mem_pdu_rx.free);
 
 	/* Initialize rx link pool. */
@@ -1082,10 +1127,14 @@ static inline int init_reset(void)
 	return 0;
 }
 
+/**
+ * @brief Allocate buffers for done events
+ */
 static inline void done_alloc(void)
 {
 	u8_t idx;
 
+	/* mfifo_done is a queue of pointers */
 	while (MFIFO_ENQUEUE_IDX_GET(done, &idx)) {
 		memq_link_t *link;
 		struct node_rx_hdr *rx;
@@ -1279,7 +1328,7 @@ static void rx_demux(void *param)
 #if defined(CONFIG_BT_CONN)
 			struct node_tx *node_tx;
 			memq_link_t *link_tx;
-			u16_t handle;
+			u16_t handle; /* Handle to Ack TX */
 #endif /* CONFIG_BT_CONN */
 
 			LL_ASSERT(rx);
@@ -1311,6 +1360,11 @@ static void rx_demux(void *param)
 	} while (link);
 }
 
+/**
+ * @brief Dispatch rx objects
+ * @details Rx objects are only peeked, not dequeued yet.
+ *   Execution context: ULL high priority Mayfly
+ */
 static inline void rx_demux_rx(memq_link_t *link, struct node_rx_hdr *rx)
 {
 	/* Demux Rx objects */
@@ -1462,7 +1516,7 @@ static inline void rx_demux_event_done(memq_link_t *link,
 
 	/* Decrement prepare reference */
 	LL_ASSERT(ull_hdr->ref);
-	ull_hdr->ref--;
+	ull_ref_dec(ull_hdr);
 
 	/* If disable initiated, signal the semaphore */
 	if (!ull_hdr->ref && ull_hdr->disabled_cb) {

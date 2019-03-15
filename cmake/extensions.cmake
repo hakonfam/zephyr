@@ -126,8 +126,26 @@ endfunction()
 # merges the resulting hex files. The 'flash' target is updated to use this
 # merged hex file instead of the 'zephyr.hex' file from the origin context.
 #
-function(zephyr_add_executable name)
-  set_property(GLOBAL PROPERTY IMAGE ${name}_)
+function(zephyr_add_executable name output_variable)
+  set(${output_variable} 0 PARENT_SCOPE)
+  string(TOUPPER ${name} UPNAME)
+
+  if (CONFIG_${UPNAME}_BUILD_STRATEGY_USE_HEX_FILE)
+    assert_exists(CONFIG_${UPNAME}_HEX_FILE)
+    message("Using ${CONFIG_${UPNAME}_HEX_FILE} instead of building ${name}")
+    set_property(GLOBAL APPEND PROPERTY
+      HEX_FILES_TO_MERGE
+      ${CONFIG_${UPNAME}_HEX_FILE}
+      ${APPLICATION_BINARY_DIR}/zephyr/${KERNEL_HEX_NAME}
+      )
+  elseif (CONFIG_${UPNAME}_BUILD_STRATEGY_SKIP_BUILD)
+    message("Skipping building of ${name}")
+  else()
+    # Build normally
+    set_property(GLOBAL PROPERTY IMAGE ${name}_)
+    set(${output_variable} 1 PARENT_SCOPE)
+  endif()
+
 endfunction()
 
 

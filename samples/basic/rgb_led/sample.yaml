@@ -6,3 +6,4 @@ tests:
     filter: RED_PWM_LED_PWM_CONTROLLER
     tags: drivers pwm
     depends_on: pwm
+    harness: led

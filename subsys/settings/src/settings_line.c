@@ -7,7 +7,6 @@
 
 #include <ctype.h>
 #include <string.h>
-#include <misc/__assert.h>
 
 #include "settings/settings.h"
 #include "settings_priv.h"
@@ -16,7 +15,8 @@
 #include "base64.h"
 #endif
 
-#include "misc/printk.h"
+#include <logging/log.h>
+LOG_MODULE_DECLARE(settings, CONFIG_SETTINGS_LOG_LEVEL);
 
 int settings_line_parse(char *buf, char **namep, char **valp)
 {
@@ -263,7 +263,7 @@ int settings_next_line_ctx(struct line_entry_ctx *entry_ctx)
 
 int settings_line_len_calc(const char *name, size_t val_len)
 {
-	int len, mod;
+	int len;
 
 #ifdef CONFIG_SETTINGS_USE_BASE64
 	/* <enc(value)> */
@@ -274,11 +274,7 @@ int settings_line_len_calc(const char *name, size_t val_len)
 #endif
 	/* <name>=<enc(value)> */
 	len += strlen(name) + 1;
-	mod = len % settings_io_cb.rwbs;
-	if (mod) {
-		 /*additional \0 for meet flash alignment */
-		len += settings_io_cb.rwbs - mod;
-	}
+
 	return len;
 }
 
@@ -451,7 +447,9 @@ size_t settings_line_val_get_len(off_t val_off, void *read_cb_ctx)
 		rc = settings_line_raw_read(len - 2, raw, 2, &len, read_cb_ctx);
 		if (rc || len != 2) {
 			/* very unexpected error */
-			__ASSERT(rc == 0, "Failed to read the storage.\n");
+			if (rc != 0) {
+				LOG_ERR("Failed to read the storage (%d)", rc);
+			}
 			return 0;
 		}
 

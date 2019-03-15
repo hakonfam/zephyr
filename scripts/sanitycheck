@@ -624,6 +624,9 @@ class DeviceHandler(Handler):
                 serial_line = ser.readline()
             except TypeError:
                 pass
+            except serial.serialutil.SerialException:
+                ser.close()
+                break
 
             # Just because ser_fileno has data doesn't mean an entire line
             # is available yet.
@@ -852,8 +855,7 @@ class SizeCalculator:
 
     alloc_sections = ["bss", "noinit", "app_bss", "app_noinit", "ccm_bss",
                       "ccm_noinit"]
-    rw_sections = ["datas", "initlevel", "_k_task_list", "_k_event_list",
-                   "_k_memory_pool", "exceptions", "initshell",
+    rw_sections = ["datas", "initlevel", "exceptions", "initshell",
                    "_static_thread_area", "_k_timer_area",
                    "_k_mem_slab_area", "_k_mem_pool_area", "sw_isr_table",
                    "_k_sem_area", "_k_mutex_area", "app_shmem_regions",
@@ -872,7 +874,7 @@ class SizeCalculator:
     # These get copied into RAM only on non-XIP
     ro_sections = ["text", "ctors", "init_array", "reset", "object_access",
                    "rodata", "devconfig", "net_l2", "vector", "sw_isr_table",
-                   "_bt_settings_area"]
+                   "_bt_settings_area", "vectors"]
 
     def __init__(self, filename, extra_sections):
         """Constructor
@@ -1258,9 +1260,20 @@ class MakeGenerator:
             by execute() will be keyed by its .name field.
         """
         args = ti.test.extra_args[:]
+
+        # merge overlay files into one variable
+        overlays = ""
+        idx = 0
+        for a in args:
+            m = re.search('OVERLAY_CONFIG="(.*)"', a)
+            if m:
+                overlays += m.group(1)
+                del args[idx]
+                idx += 1
+
         if len(ti.test.extra_configs) > 0 or options.coverage:
-            args.append("OVERLAY_CONFIG=%s" %
-                        os.path.join(ti.outdir, "overlay.conf"))
+            args.append("OVERLAY_CONFIG=\"%s %s\"" %(overlays,
+                        os.path.join(ti.outdir, "overlay.conf")))
 
         if ti.test.type == "unit" and options.enable_coverage:
             args.append("COVERAGE=1")
@@ -1800,17 +1813,17 @@ class TestInstance:
     def create_overlay(self, platform):
         file = os.path.join(self.outdir, "overlay.conf")
         os.makedirs(self.outdir, exist_ok=True)
-        f = open(file, "w")
-        content = ""
+        with open(file, "w") as f:
+            content = ""
 
-        if len(self.test.extra_configs) > 0:
-            content = "\n".join(self.test.extra_configs)
-        if options.enable_coverage:
-            if platform in options.coverage_platform:
-                content = content + "\nCONFIG_COVERAGE=y"
+            if len(self.test.extra_configs) > 0:
+                content = "\n".join(self.test.extra_configs)
 
-        f.write(content)
-        f.close()
+            if options.enable_coverage:
+                if platform in options.coverage_platform:
+                    content = content + "\nCONFIG_COVERAGE=y"
+
+            f.write(content)
 
     def calculate_sizes(self):
         """Get the RAM/ROM sizes of a test case.
@@ -1928,8 +1941,15 @@ class TestSuite:
 
         self.instances = {}
 
-    def get_last_failed(self):
+    def get_platform(self, name):
+        selected_platform = None
+        for platform in self.platforms:
+            if platform.name == name:
+                selected_platform = platform
+                break
+        return selected_platform
 
+    def get_last_failed(self):
         try:
             if not os.path.exists(LAST_SANITY):
                 raise SanityRuntimeError("Couldn't find last sanity run.")
@@ -1940,13 +1960,16 @@ class TestSuite:
         result = []
         with open(LAST_SANITY, "r") as fp:
             cr = csv.DictReader(fp)
+            instance_list = []
             for row in cr:
                 if row["passed"] == "True":
                     continue
                 test = row["test"]
-                platform = row["platform"]
-                result.append((test, platform))
-        return result
+                platform = self.get_platform(row["platform"])
+                instance = TestInstance(self.testcases[test], platform, self.outdir)
+                instance.create_overlay(platform.name)
+                instance_list.append(instance)
+            self.add_instances(instance_list)
 
     def load_from_file(self, file):
         try:
@@ -1962,14 +1985,9 @@ class TestSuite:
             instance_list = []
             for row in cr:
                 name = os.path.join(row[0], row[1])
-                platforms = self.arches[row[3]].platforms
-                myp = None
-                for platform in platforms:
-                    if platform.name == row[2]:
-                        selected_platform = platform
-                        break
-                instance = TestInstance(self.testcases[name], selected_platform, self.outdir)
-                instance.create_overlay(selected_platform.name)
+                platform = self.get_platform(row[2])
+                instance = TestInstance(self.testcases[name], platform, self.outdir)
+                instance.create_overlay(platform.name)
                 instance_list.append(instance)
             self.add_instances(instance_list)
 
@@ -1993,7 +2011,6 @@ class TestSuite:
         instances = []
         discards = {}
         platform_filter = options.platform
-        last_failed = options.only_failed
         testcase_filter = run_individual_tests
         arch_filter = options.arch
         tag_filter = options.tag
@@ -2007,9 +2024,6 @@ class TestSuite:
         verbose("     tag_filter: " + str(tag_filter))
         verbose("    exclude_tag: " + str(exclude_tag))
         verbose("  config_filter: " + str(config_filter))
-
-        if last_failed:
-            failed_tests = self.get_last_failed()
 
         default_platforms = False
 
@@ -2046,10 +2060,6 @@ class TestSuite:
                         continue
 
                     if testcase_filter and tc_name not in testcase_filter:
-                        continue
-
-                    if last_failed and (
-                            tc.name, plat.name) not in failed_tests:
                         continue
 
                     if arch_filter and arch_name not in arch_filter:
@@ -2198,11 +2208,6 @@ class TestSuite:
 
                     if testcase_filter and tc_name not in testcase_filter:
                         discards[instance] = "Testcase name filter"
-                        continue
-
-                    if last_failed and (
-                            tc.name, plat.name) not in failed_tests:
-                        discards[instance] = "Passed or skipped during last run"
                         continue
 
                     if arch_filter and arch_name not in arch_filter:
@@ -2644,6 +2649,8 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.fromfile_prefix_chars = "+"
 
+    case_select = parser.add_argument_group("Test case selection")
+
     parser.add_argument("--force-toolchain", action="store_true",
             help="Do not filter based on toolchain, use the set "
             " toolchain unconditionally")
@@ -2667,7 +2674,7 @@ def parse_arguments():
     parser.add_argument("-e", "--exclude-tag", action="append",
                         help="Specify tags of tests that should not run. "
                         "Default is to run all tests with all tags.")
-    parser.add_argument(
+    case_select.add_argument(
         "-f",
         "--only-failed",
         action="store_true",
@@ -2683,13 +2690,15 @@ def parse_arguments():
         "defconfig that have that value assigned to any value. "
         "Prepend a '!' to invert the match.")
 
-    parser.add_argument(
+    test_xor_subtest = case_select.add_mutually_exclusive_group()
+
+    test_xor_subtest.add_argument(
         "-s", "--test", action="append",
         help="Run only the specified test cases. These are named by "
         "<path to test project relative to "
         "--testcase-root>/<testcase.yaml section name>")
 
-    parser.add_argument(
+    test_xor_subtest.add_argument(
         "--sub-test", action="append",
         help="Run only the specified sub-test cases and its parent. These are named by "
         "test case name appended by test function, i.e. kernel.mutex.mutex_lock_unlock."
@@ -2730,7 +2739,7 @@ def parse_arguments():
     parser.add_argument("--list-tags", action="store_true",
             help="list all tags in selected tests")
 
-    parser.add_argument("--list-tests", action="store_true",
+    case_select.add_argument("--list-tests", action="store_true",
             help="list all tests.")
 
     parser.add_argument("--export-tests", action="store",
@@ -2774,14 +2783,14 @@ def parse_arguments():
         action="store_true",
         help="do not update the results of the last run of the sanity "
         "checks")
-    parser.add_argument(
+    case_select.add_argument(
         "-F",
         "--load-tests",
         metavar="FILENAME",
         action="store",
         help="Load list of tests to be run from file.")
 
-    parser.add_argument(
+    case_select.add_argument(
         "-E",
         "--save-tests",
         metavar="FILENAME",
@@ -2831,7 +2840,7 @@ def parse_arguments():
         "-n", "--no-clean", action="store_true",
         help="Do not delete the outdir before building. Will result in "
         "faster compilation since builds will be incremental")
-    parser.add_argument(
+    case_select.add_argument(
         "-T", "--testcase-root", action="append", default=[],
         help="Base directory to recursively search for test cases. All "
         "testcase.yaml files under here will be processed. May be "
@@ -3226,6 +3235,8 @@ def main():
     discards = []
     if options.load_tests:
         ts.load_from_file(options.load_tests)
+    elif options.only_failed:
+        ts.get_last_failed()
     else:
         discards = ts.apply_filters()
 

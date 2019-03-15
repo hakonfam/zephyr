@@ -140,7 +140,7 @@ extern void idle(void *unused1, void *unused2, void *unused3);
  *
  * @return N/A
  */
-void _bss_zero(void)
+void z_bss_zero(void)
 {
 	(void)memset(&__bss_start, 0,
 		     ((u32_t) &__bss_end - (u32_t) &__bss_start));
@@ -159,6 +159,10 @@ void _bss_zero(void)
 #endif
 }
 
+#ifdef CONFIG_STACK_CANARIES
+extern volatile uintptr_t __stack_chk_guard;
+#endif /* CONFIG_STACK_CANARIES */
+
 
 #ifdef CONFIG_XIP
 /**
@@ -169,10 +173,14 @@ void _bss_zero(void)
  *
  * @return N/A
  */
-void _data_copy(void)
+void z_data_copy(void)
 {
 	(void)memcpy(&__data_ram_start, &__data_rom_start,
 		 ((u32_t) &__data_ram_end - (u32_t) &__data_ram_start));
+#ifdef CONFIG_ARCH_HAS_RAMFUNC_SUPPORT
+	(void)memcpy(&_ramfunc_ram_start, &_ramfunc_rom_start,
+		 ((u32_t) &_ramfunc_ram_size));
+#endif /* CONFIG_ARCH_HAS_RAMFUNC_SUPPORT */
 #ifdef DT_CCM_BASE_ADDRESS
 	(void)memcpy(&__ccm_data_start, &__ccm_data_rom_start,
 		 ((u32_t) &__ccm_data_end - (u32_t) &__ccm_data_start));
@@ -182,10 +190,30 @@ void _data_copy(void)
 
 	data_copy_xip_relocation();
 #endif	/* CONFIG_CODE_DATA_RELOCATION */
-#ifdef CONFIG_APP_SHARED_MEM
+#ifdef CONFIG_USERSPACE
+#ifdef CONFIG_STACK_CANARIES
+	/* stack canary checking is active for all C functions.
+	 * __stack_chk_guard is some uninitialized value living in the
+	 * app shared memory sections. Preserve it, and don't make any
+	 * function calls to perform the memory copy. The true canary
+	 * value gets set later in z_cstart().
+	 */
+	uintptr_t guard_copy = __stack_chk_guard;
+	u8_t *src = (u8_t *)&_app_smem_rom_start;
+	u8_t *dst = (u8_t *)&_app_smem_start;
+	u32_t count = (u32_t)&_app_smem_end - (u32_t)&_app_smem_start;
+
+	guard_copy = __stack_chk_guard;
+	while (count > 0) {
+		*(dst++) = *(src++);
+		count--;
+	}
+	__stack_chk_guard = guard_copy;
+#else
 	(void)memcpy(&_app_smem_start, &_app_smem_rom_start,
 		 ((u32_t) &_app_smem_end - (u32_t) &_app_smem_start));
-#endif
+#endif /* CONFIG_STACK_CANARIES */
+#endif /* CONFIG_USERSPACE */
 }
 #endif
 
@@ -210,7 +238,7 @@ static void bg_thread_main(void *unused1, void *unused2, void *unused3)
 	static const unsigned int boot_delay;
 #endif
 
-	_sys_device_do_config_level(_SYS_INIT_LEVEL_POST_KERNEL);
+	z_sys_device_do_config_level(_SYS_INIT_LEVEL_POST_KERNEL);
 #if CONFIG_STACK_POINTER_RANDOM
 	z_stack_adjust_initialized = 1;
 #endif
@@ -222,7 +250,7 @@ static void bg_thread_main(void *unused1, void *unused2, void *unused3)
 	PRINT_BOOT_BANNER();
 
 	/* Final init level before app starts */
-	_sys_device_do_config_level(_SYS_INIT_LEVEL_APPLICATION);
+	z_sys_device_do_config_level(_SYS_INIT_LEVEL_APPLICATION);
 
 #ifdef CONFIG_CPLUSPLUS
 	/* Process the .ctors and .init_array sections */
@@ -232,7 +260,7 @@ static void bg_thread_main(void *unused1, void *unused2, void *unused3)
 	__do_init_array_aux();
 #endif
 
-	_init_static_threads();
+	z_init_static_threads();
 
 #ifdef CONFIG_SMP
 	smp_init();
@@ -269,10 +297,10 @@ static void init_idle_thread(struct k_thread *thr, k_thread_stack_t *stack)
 	thr->base.is_idle = 1;
 #endif
 
-	_setup_new_thread(thr, stack,
+	z_setup_new_thread(thr, stack,
 			  IDLE_STACK_SIZE, idle, NULL, NULL, NULL,
 			  K_LOWEST_THREAD_PRIO, K_ESSENTIAL, IDLE_THREAD_NAME);
-	_mark_thread_as_started(thr);
+	z_mark_thread_as_started(thr);
 }
 #endif
 
@@ -321,7 +349,7 @@ static void prepare_multithreading(struct k_thread *dummy_thread)
 #endif
 
 	/* _kernel.ready_q is all zeroes */
-	_sched_init();
+	z_sched_init();
 
 #ifndef CONFIG_SMP
 	/*
@@ -336,14 +364,14 @@ static void prepare_multithreading(struct k_thread *dummy_thread)
 	_kernel.ready_q.cache = _main_thread;
 #endif
 
-	_setup_new_thread(_main_thread, _main_stack,
+	z_setup_new_thread(_main_thread, _main_stack,
 			  MAIN_STACK_SIZE, bg_thread_main,
 			  NULL, NULL, NULL,
 			  CONFIG_MAIN_THREAD_PRIORITY, K_ESSENTIAL, "main");
 	sys_trace_thread_create(_main_thread);
 
-	_mark_thread_as_started(_main_thread);
-	_ready_thread(_main_thread);
+	z_mark_thread_as_started(_main_thread);
+	z_ready_thread(_main_thread);
 
 #ifdef CONFIG_MULTITHREADING
 	init_idle_thread(_idle_thread, _idle_stack);
@@ -382,7 +410,7 @@ static void prepare_multithreading(struct k_thread *dummy_thread)
 static void switch_to_main_thread(void)
 {
 #ifdef CONFIG_ARCH_HAS_CUSTOM_SWAP_TO_MAIN
-	_arch_switch_to_main_thread(_main_thread, _main_stack, MAIN_STACK_SIZE,
+	z_arch_switch_to_main_thread(_main_thread, _main_stack, MAIN_STACK_SIZE,
 				    bg_thread_main);
 #else
 	/*
@@ -390,7 +418,7 @@ static void switch_to_main_thread(void)
 	 * current fake thread is not on a wait queue or ready queue, so it
 	 * will never be rescheduled in.
 	 */
-	_Swap_unlocked();
+	z_swap_unlocked();
 #endif
 }
 #endif /* CONFIG_MULTITHREADING */
@@ -435,10 +463,6 @@ sys_rand32_fallback:
 	return sys_rand32_get();
 }
 
-#ifdef CONFIG_STACK_CANARIES
-extern uintptr_t __stack_chk_guard;
-#endif /* CONFIG_STACK_CANARIES */
-
 /**
  *
  * @brief Initialize kernel
@@ -449,7 +473,7 @@ extern uintptr_t __stack_chk_guard;
  *
  * @return Does not return
  */
-FUNC_NORETURN void _Cstart(void)
+FUNC_NORETURN void z_cstart(void)
 {
 	/* gcov hook needed to get the coverage report.*/
 	gcov_static_init();
@@ -472,9 +496,13 @@ FUNC_NORETURN void _Cstart(void)
 	_current = &dummy_thread;
 #endif
 
+#ifdef CONFIG_USERSPACE
+	z_app_shmem_bss_zero();
+#endif
+
 	/* perform basic hardware initialization */
-	_sys_device_do_config_level(_SYS_INIT_LEVEL_PRE_KERNEL_1);
-	_sys_device_do_config_level(_SYS_INIT_LEVEL_PRE_KERNEL_2);
+	z_sys_device_do_config_level(_SYS_INIT_LEVEL_PRE_KERNEL_1);
+	z_sys_device_do_config_level(_SYS_INIT_LEVEL_PRE_KERNEL_2);
 
 #ifdef CONFIG_STACK_CANARIES
 	__stack_chk_guard = z_early_boot_rand32_get();

@@ -15,12 +15,12 @@ transferred. Thus, it can serve as a "load testing" application for
 the Zephyr IP stack.
 
 The source code for this sample application can be found at:
-:file:`samples/net/sockets/big_http_download`.
+:zephyr_file:`samples/net/sockets/big_http_download`.
 
 Requirements
 ************
 
-- :ref:`networking_with_qemu`
+- :ref:`networking_with_host`
 - or, a board with hardware networking
 - NAT/routing should be set up to allow connections to the Internet
 - DNS server should be available on the host to resolve domain names

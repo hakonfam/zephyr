@@ -21,6 +21,7 @@
 		uart-1 = &uart1;
 		led0 = &green_led;
 		sw0 = &user_button;
+		eth = &eth;
 	};
 
 	chosen {
@@ -50,6 +51,15 @@
 			gpios = <&gpio5 0 GPIO_INT_ACTIVE_LOW>;
 		};
 	};
+
+	panel {
+		compatible = "rocktech,rk043fn02h-ct";
+		port {
+			lcd_panel_in: endpoint {
+				remote-endpoint = <&lcd_panel_out>;
+			};
+		};
+	};
 };
 
 &flexspi1 {
@@ -62,7 +72,23 @@
 	};
 };
 
+&lcdif1 {
+	status = "ok";
+	port {
+		lcd_panel_out: endpoint {
+			remote-endpoint = <&lcd_panel_in>;
+		};
+	};
+};
+
 &uart1 {
 	status = "ok";
 	current-speed = <115200>;
+};
+
+&eth {
+	status = "ok";
+	ptp {
+		status = "ok";
+	};
 };

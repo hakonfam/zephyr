@@ -110,14 +110,14 @@ SECTION_FUNC(TEXT, __pendsv)
     /* _kernel is still in r1 */
 
     /* fetch the thread to run from the ready queue cache */
-    ldr r2, [r1, _kernel_offset_to_ready_q_cache]
+    ldr r2, [r1, #_kernel_offset_to_ready_q_cache]
 
     str r2, [r1, #_kernel_offset_to_current]
 
     /*
      * Clear PendSV so that if another interrupt comes in and
-     * decides, with the new kernel state baseed on the new thread
-     * being context-switched in, that it needs to reschedules, it
+     * decides, with the new kernel state based on the new thread
+     * being context-switched in, that it needs to reschedule, it
      * will take, but that previously pended PendSVs do not take,
      * since they were based on the previous kernel state and this
      * has been handled.
@@ -187,7 +187,7 @@ _thread_irq_disabled:
     push {r2,lr}
     ldr r0, =_kernel
     ldr r0, [r0, #_kernel_offset_to_current]
-    bl _arch_configure_dynamic_mpu_regions
+    bl z_arch_configure_dynamic_mpu_regions
     pop {r2,lr}
 #endif
 
@@ -226,7 +226,7 @@ _thread_irq_disabled:
     /* r2 contains k_thread */
     add r0, r2, #0
     push {r2, lr}
-    blx configure_builtin_stack_guard
+    bl configure_builtin_stack_guard
     pop {r2, lr}
 #endif /* CONFIG_BUILTIN_STACK_GUARD */
 
@@ -302,7 +302,7 @@ _stack_frame_endif:
 
 #if CONFIG_IRQ_OFFLOAD
     push {r0, lr}
-    blx _irq_do_offload  /* call C routine which executes the offload */
+    bl _irq_do_offload  /* call C routine which executes the offload */
     pop {r0, r1}
     mov lr, r1
 #endif /* CONFIG_IRQ_OFFLOAD */
@@ -312,7 +312,7 @@ _stack_frame_endif:
 
 _oops:
     push {r0, lr}
-    blx _do_kernel_oops
+    bl _do_kernel_oops
     pop {r0, pc}
 
 #elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
@@ -335,7 +335,7 @@ SECTION_FUNC(TEXT, __svc)
         mrsne r0, PSP   /* thread mode, stack frame is on PSP */
 
     ldr r1, [r0, #24]   /* grab address of PC from stack frame */
-    /* SVC is a two-byte instruction, point to it and read  encoding */
+    /* SVC is a two-byte instruction, point to it and read encoding */
     ldrh r1, [r1, #-2]
 
    /*
@@ -343,7 +343,7 @@ SECTION_FUNC(TEXT, __svc)
     * 0: Unused
     * 1: irq_offload (if configured)
     * 2: kernel panic or oops (software generated fatal exception)
-    * 3: System call
+    * 3: System call (if user mode supported)
     * Planned implementation of system calls for memory protection will
     * expand this case.
     */
@@ -368,7 +368,7 @@ SECTION_FUNC(TEXT, __svc)
 
 #if CONFIG_IRQ_OFFLOAD
     push {r0, lr}
-    blx _irq_do_offload  /* call C routine which executes the offload */
+    bl _irq_do_offload  /* call C routine which executes the offload */
     pop {r0, lr}
 
     /* exception return is done in _IntExit() */
@@ -377,7 +377,7 @@ SECTION_FUNC(TEXT, __svc)
 
 _oops:
     push {r0, lr}
-    blx _do_kernel_oops
+    bl _do_kernel_oops
     pop {r0, pc}
 
 #if CONFIG_USERSPACE
@@ -386,7 +386,7 @@ _oops:
      * when the SVC returns via the bx lr.
      *
      * There is some trickery involved here because we have to preserve
-     * the original LR value so that we can return back to the caller of
+     * the original PC value so that we can return back to the caller of
      * the SVC.
      *
      * On SVC exeption, the stack looks like the following:
@@ -405,7 +405,7 @@ _oops:
 _do_syscall:
     ldr r8, [r0, #24]   /* grab address of PC from stack frame */
     ldr r1, =_arm_do_syscall
-    str r1, [r0, #24]   /* overwrite the LR to point to _arm_do_syscall */
+    str r1, [r0, #24]   /* overwrite the PC to point to _arm_do_syscall */
 
     /* validate syscall limit, only set priv mode if valid */
     ldr ip, =K_SYSCALL_LIMIT

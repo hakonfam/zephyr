@@ -14,7 +14,10 @@ LOG_MODULE_REGISTER(net_ethernet, CONFIG_NET_L2_ETHERNET_LOG_LEVEL);
 #include <net/ethernet.h>
 #include <net/ethernet_mgmt.h>
 #include <net/gptp.h>
+
+#if defined(CONFIG_NET_LLDP)
 #include <net/lldp.h>
+#endif
 
 #include "arp.h"
 #include "eth_stats.h"
@@ -955,18 +958,6 @@ int net_eth_promisc_mode(struct net_if *iface, bool enable)
 	return net_mgmt(NET_REQUEST_ETHERNET_SET_PROMISC_MODE, iface,
 			&params, sizeof(struct ethernet_req_params));
 }
-
-#if defined(CONFIG_NET_LLDP)
-int net_eth_set_lldpdu(struct net_if *iface, const struct net_lldpdu *lldpdu)
-{
-	return net_lldp_config(iface, lldpdu);
-}
-
-void net_eth_unset_lldpdu(struct net_if *iface)
-{
-	net_lldp_config(iface, NULL);
-}
-#endif
 
 void ethernet_init(struct net_if *iface)
 {

@@ -110,7 +110,7 @@ SECTION_FUNC(TEXT, _exception_enter)
 
 	/* ESP is pointing to the ESF at this point */
 
-#if defined(CONFIG_FP_SHARING)
+#if defined(CONFIG_LAZY_FP_SHARING)
 
 	movl	_kernel + _kernel_offset_to_current, %edx
 
@@ -119,7 +119,7 @@ SECTION_FUNC(TEXT, _exception_enter)
 
 	/*
 	 * Set the _EXC_ACTIVE state bit of the current thread.
-	 * This enables _Swap() to preserve the thread's FP registers
+	 * This enables z_swap() to preserve the thread's FP registers
 	 * (where needed) if the exception handler causes a context switch.
 	 * It also indicates to debug tools that an exception is being
 	 * handled in the event of a context switch.
@@ -127,7 +127,7 @@ SECTION_FUNC(TEXT, _exception_enter)
 
 	orb	$_EXC_ACTIVE, _thread_offset_to_thread_state(%edx)
 
-#endif /* CONFIG_FP_SHARING */
+#endif /* CONFIG_LAZY_FP_SHARING */
 
 	/*
 	 * restore interrupt enable state, then call the handler
@@ -157,7 +157,7 @@ allDone:
 	addl	$0x4, %esp
 #endif
 
-#if defined(CONFIG_FP_SHARING)
+#if defined(CONFIG_LAZY_FP_SHARING)
 
 	movl	_kernel + _kernel_offset_to_current, %ecx
 
@@ -187,7 +187,7 @@ allDone:
 	andb	$~_EXC_ACTIVE, _thread_offset_to_thread_state(%ecx)
 
 nestedException:
-#endif /* CONFIG_FP_SHARING */
+#endif /* CONFIG_LAZY_FP_SHARING */
 
 	/*
 	 * Pop the non-volatile registers from the stack.

@@ -64,11 +64,7 @@
 
   #elif defined(CONFIG_ARM)
 
-    #ifdef CONFIG_ISA_THUMB
-      #define PERFOPT_ALIGN .balign  2
-    #else
-      #define PERFOPT_ALIGN .balign  4
-    #endif
+    #define PERFOPT_ALIGN .balign  4
 
   #elif defined(CONFIG_ARC)
 
@@ -96,8 +92,8 @@
   #define ALWAYS_INLINE inline __attribute__((always_inline))
 #endif
 
-#define _STRINGIFY(x) #x
-#define STRINGIFY(s) _STRINGIFY(s)
+#define Z_STRINGIFY(x) #x
+#define STRINGIFY(s) Z_STRINGIFY(s)
 
 /* concatenate the values of the arguments into one */
 #define _DO_CONCAT(x, y) x ## y

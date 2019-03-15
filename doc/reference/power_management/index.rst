@@ -16,21 +16,21 @@ Terminology
    SOC and provide interfaces to the hardware features. It will abstract
    the SOC specific implementations to the applications and the OS.
 
-:dfn:`CPU LPS (Low Power State)`
-   Refers to any one of the low power states supported by the CPU. The CPU is
-   usually powered on while the clocks are power gated.
+:dfn:`SOC Power State`
+   SOC Power State describes processor and device power states implemented at
+   the SOC level. Deep Sleep State is an example of SOC Power State.
 
 :dfn:`Active State`
    The CPU and clocks are powered on. This is the normal operating state when
    the system is running.
 
-:dfn:`Deep Sleep State`
-   The CPU is power gated and loses context. Most peripherals would also be
-   power gated. RAM is selectively retained.
+:dfn:`Low Power State`
+   Refers to any one of the low power states supported by the SoC. The SoC is
+   usually powered on while the clocks are power gated.
 
-:dfn:`SOC Power State`
-   SOC Power State describes processor and device power states implemented at
-   the SOC level. Deep Sleep State is an example of SOC Power State.
+:dfn:`Deep Sleep State`
+   The SoC is power gated and loses context. Most peripherals would also be
+   power gated. RAM may be selectively retained.
 
 :dfn:`Idle Thread`
    A system thread that runs when there are no other threads ready to run.
@@ -110,7 +110,7 @@ At this point, the kernel has disabled interrupts and computed the maximum
 time the system can remain idle. The function passes the time that
 the system can remain idle. The SOC interface performs power operations that
 can be done in the available time. The power management operation must halt
-execution on a CPU or SOC low power state. Before entering the low power state,
+execution on a CPU or SOC power state. Before entering the power state,
 the SOC interface must setup a wake event.
 
 The power management subsystem expects the :code:`sys_suspend()` to return
@@ -158,7 +158,7 @@ When the power management subsystem notifies the SOC interface that the kernel
 is about to enter a system idle state, it specifies the period of time the
 system intends to stay idle. The SOC interface can perform various power
 management operations during this time. For example, put the processor or the
-SOC in a low power state, turn off some or all of the peripherals or power gate
+SOC in a power state, turn off some or all of the peripherals or power gate
 device clocks.
 
 Different levels of power savings and different wake latencies characterize
@@ -214,17 +214,17 @@ saves power if some devices that are not in use can be turned off or put
 in power saving mode. This method allows saving power even when the CPU is
 active. The components that use the devices need to be power aware and should
 be able to make decisions related to managing device power. In this method, the
-SOC interface can enter CPU or SOC low power states quickly when
+SOC interface can enter CPU or SOC power states quickly when
 :code:`sys_suspend()` gets called. This is because it does not need to
 spend time doing device power management if the devices are already put in
-the appropriate low power state by the application or component managing the
+the appropriate power state by the application or component managing the
 devices.
 
 Central method
 ==============
 
 In this method device power management is mostly done inside
-:code:`sys_suspend()` along with entering a CPU or SOC low power state.
+:code:`sys_suspend()` along with entering a CPU or SOC power state.
 
 If a decision to enter deep sleep is made, the implementation would enter it
 only after checking if the devices are not in the middle of a hardware
@@ -339,7 +339,7 @@ Device Set Power State
 
 .. code-block:: c
 
-   int device_set_power_state(struct device *device, u32_t device_power_state);
+   int device_set_power_state(struct device *device, u32_t device_power_state, device_pm_cb cb, void *arg);
 
 Calls the :c:func:`device_pm_control()` handler function implemented by the
 device driver with DEVICE_PM_SET_POWER_STATE command.
@@ -423,6 +423,92 @@ Check Busy Status of All Devices API
 
 Checks if any device is busy. The API returns 0 if no device in the system is busy.
 
+Device Idle Power Management
+****************************
+
+
+The Device Idle Power Management framework is a Active Power
+Management mechanism which reduces the overall system Power consumtion
+by suspending the devices which are idle or not being used while the
+System is active or running.
+
+The framework uses device_set_power_state() API set the
+device power state accordingly based on the usage count.
+
+The interfaces and APIs provided by the Device Idle PM are
+designed to be generic and architecture independent.
+
+Device Idle Power Management API
+================================
+
+The Device Drivers use these APIs to perform device idle power management
+operations on the devices.
+
+Enable Device Idle Power Management of a Device API
+---------------------------------------------------
+
+.. code-block:: c
+
+   void device_pm_enable(struct device *dev);
+
+Enbles Idle Power Management of the device.
+
+Disable Device Idle Power Management of a Device API
+----------------------------------------------------
+
+.. code-block:: c
+
+   void device_pm_disable(struct device *dev);
+
+Disables Idle Power Management of the device.
+
+Resume Device asynchronously API
+--------------------------------
+
+.. code-block:: c
+
+   int device_pm_get(struct device *dev);
+
+Marks the device as being used. This API will asynchronously
+bring the device to resume state. The API returns 0 on success.
+
+Resume Device synchronously API
+-------------------------------
+
+.. code-block:: c
+
+   int device_pm_get_sync(struct device *dev);
+
+Marks the device as being used. It will bring up or resume
+the device if it is in suspended state based on the device
+usage count. This call is blocked until the device PM state
+is changed to active. The API returns 0 on success.
+
+Suspend Device asynchronously API
+---------------------------------
+
+.. code-block:: c
+
+   int device_pm_put(struct device *dev);
+
+Marks the device as being released. This API asynchronously put
+the device to suspend state if not already in suspend state.
+The API returns 0 on success.
+
+Suspend Device synchronously API
+--------------------------------
+
+.. code-block:: c
+
+   int device_pm_put_sync(struct device *dev);
+
+Marks the device as being released. It will put the device to
+suspended state if is is in active state based on the device
+usage count. This call is blocked until the device PM state
+is changed to resume. The API returns 0 on success. This
+call is blocked until the device is suspended.
+
+
 Power Management Configuration Flags
 ************************************
 
@@ -449,6 +535,10 @@ the following configuration flags.
 
    This flag is enabled if the SOC interface and the devices support device power
    management.
+
+:code:`CONFIG_DEVICE_IDLE_PM`
+
+   This flag enables the Device Idle Power Management.
 
 API Reference
 *************

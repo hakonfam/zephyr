@@ -321,11 +321,18 @@ static int pwm_nrfx_pm_control(struct device *dev,
 #define PWM_NRFX_PM_CONTROL(idx)					\
 	static int pwm_##idx##_nrfx_pm_control(struct device *dev,	\
 					       u32_t ctrl_command,	\
-					       void *context)		\
+					       void *context,		\
+					       device_pm_cb cb,		\
+					       void *arg)		\
 	{								\
 		static u32_t current_state = DEVICE_PM_ACTIVE_STATE;	\
-		return pwm_nrfx_pm_control(dev, ctrl_command, context,	\
+		int ret = 0;                                            \
+		ret = pwm_nrfx_pm_control(dev, ctrl_command, context,	\
 					   &current_state);		\
+		if (cb) {                                               \
+			cb(dev, ret, context, arg);                     \
+		}                                                       \
+		return ret;                                             \
 	}
 #else
 
@@ -372,7 +379,8 @@ static int pwm_nrfx_pm_control(struct device *dev,
 		.seq.length = NRF_PWM_CHANNEL_COUNT			      \
 	};								      \
 	PWM_NRFX_PM_CONTROL(idx)					      \
-	DEVICE_DEFINE(pwm_nrfx_##idx, CONFIG_PWM_##idx##_NAME,		      \
+	DEVICE_DEFINE(pwm_nrfx_##idx,					      \
+		      DT_NORDIC_NRF_PWM_PWM_##idx##_LABEL,		      \
 		      pwm_nrfx_init, pwm_##idx##_nrfx_pm_control,	      \
 		      &pwm_nrfx_##idx##_data,				      \
 		      &pwm_nrfx_##idx##_config,				      \

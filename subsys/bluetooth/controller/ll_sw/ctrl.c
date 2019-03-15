@@ -3422,6 +3422,13 @@ static inline bool isr_rx_conn_enc_unexpected(struct connection *conn,
 		  (opcode != PDU_DATA_LLCTRL_TYPE_REJECT_EXT_IND)))) ||
 	       (conn->role &&
 		((!conn->refresh &&
+		  /* As a workaround to IOP with some old peer controllers that
+		   * respond with Unknown Rsp PDU to our local Slave Initiated
+		   * Feature request during Encryption Setup initiated by the
+		   * peer, we accept this Unknown Rsp PDU during the Encryption
+		   * setup procedure in progress.
+		   */
+		  (opcode != PDU_DATA_LLCTRL_TYPE_UNKNOWN_RSP) &&
 		  (opcode != PDU_DATA_LLCTRL_TYPE_TERMINATE_IND) &&
 		  (opcode != PDU_DATA_LLCTRL_TYPE_START_ENC_RSP) &&
 		  (opcode != PDU_DATA_LLCTRL_TYPE_REJECT_IND) &&
@@ -4928,7 +4935,7 @@ static void k32src_wait(void)
 	done = true;
 
 	struct device *lf_clock = device_get_binding(
-		CONFIG_CLOCK_CONTROL_NRF_K32SRC_DRV_NAME);
+		DT_NORDIC_NRF_CLOCK_0_LABEL "_32K");
 
 	LL_ASSERT(lf_clock);
 

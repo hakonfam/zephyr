@@ -1,4 +1,3 @@
-
 config SOC_SERIES_QUARK_X1000
 	bool "Intel Quark X1000 Series"
 	select CPU_MINUTEIA
@@ -6,8 +5,6 @@ config SOC_SERIES_QUARK_X1000
 	select HPET_TIMER
 	select BOOTLOADER_UNKNOWN
 	select PCI
-	select SYS_POWER_LOW_POWER_STATES_SUPPORTED
-	select SYS_POWER_DEEP_SLEEP_STATES_SUPPORTED
 	select SOC_FAMILY_QUARK
 	select HAS_I2C_DW
 	help

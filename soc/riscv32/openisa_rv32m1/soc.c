@@ -59,7 +59,14 @@ static const scg_lpfll_config_t rv32m1_lpfll_cfg = {
 	.trimConfig = NULL,
 };
 
-void _arch_irq_enable(unsigned int irq)
+void sys_arch_reboot(int type)
+{
+	ARG_UNUSED(type);
+
+	EVENT_UNIT->SLPCTRL |= EVENT_SLPCTRL_SYSRSTREQST_MASK;
+}
+
+void z_arch_irq_enable(unsigned int irq)
 {
 	if (IS_ENABLED(CONFIG_MULTI_LEVEL_INTERRUPTS)) {
 		unsigned int level = rv32m1_irq_level(irq);
@@ -77,7 +84,7 @@ void _arch_irq_enable(unsigned int irq)
 	}
 }
 
-void _arch_irq_disable(unsigned int irq)
+void z_arch_irq_disable(unsigned int irq)
 {
 	if (IS_ENABLED(CONFIG_MULTI_LEVEL_INTERRUPTS)) {
 		unsigned int level = rv32m1_irq_level(irq);
@@ -95,7 +102,7 @@ void _arch_irq_disable(unsigned int irq)
 	}
 }
 
-int _arch_irq_is_enabled(unsigned int irq)
+int z_arch_irq_is_enabled(unsigned int irq)
 {
 	if (IS_ENABLED(CONFIG_MULTI_LEVEL_INTERRUPTS)) {
 		unsigned int level = rv32m1_irq_level(irq);
@@ -128,7 +135,7 @@ int _arch_irq_is_enabled(unsigned int irq)
  * SoC-level interrupt initialization. Clear any pending interrupts or
  * events, and find the INTMUX device if necessary.
  *
- * This gets called as almost the first thing _Cstart() does, so it
+ * This gets called as almost the first thing z_cstart() does, so it
  * will happen before any calls to the _arch_irq_xxx() routines above.
  */
 void soc_interrupt_init(void)
@@ -139,7 +146,7 @@ void soc_interrupt_init(void)
 	(void)(EVENT_UNIT->EVTPENDCLEAR); /* Ensures write has finished. */
 
 	if (IS_ENABLED(CONFIG_MULTI_LEVEL_INTERRUPTS)) {
-		dev_intmux = device_get_binding(INTMUX_LABEL);
+		dev_intmux = device_get_binding(DT_OPENISA_RV32M1_INTMUX_INTMUX_LABEL);
 		__ASSERT(dev_intmux, "no INTMUX device found");
 	}
 }
