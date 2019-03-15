@@ -125,12 +125,16 @@ if(CONFIG_X86_MMU)
     ${ZEPHYR_BASE}/arch/x86/gen_mmu_x86.py
     -k $<TARGET_FILE:${ZEPHYR_PREBUILT_EXECUTABLE}>
     -o mmu_tables.bin
+    -u user_mmu_tables.bin
     $<$<BOOL:${CMAKE_VERBOSE_MAKEFILE}>:-v>
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     DEPENDS ${ZEPHYR_PREBUILT_EXECUTABLE}
     )
+
   add_bin_file_to_the_next_link(  ${mmu_tables_bin_target}      mmu_tables)
+  if(CONFIG_X86_KPTI)
     add_bin_file_to_the_next_link(${mmu_tables_bin_target} user_mmu_tables)
+  endif()
 endif()
 
 if(CONFIG_GDT_DYNAMIC)

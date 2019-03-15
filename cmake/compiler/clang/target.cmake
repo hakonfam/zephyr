@@ -56,6 +56,7 @@ string(REPLACE ";" " " CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
 # Clang and GCC are almost feature+flag compatible, so reuse freestanding gcc
 include(${ZEPHYR_BASE}/cmake/compiler/gcc/target_security_fortify.cmake)
 include(${ZEPHYR_BASE}/cmake/compiler/gcc/target_security_canaries.cmake)
+include(${ZEPHYR_BASE}/cmake/compiler/gcc/target_optimizations.cmake)
 include(${ZEPHYR_BASE}/cmake/compiler/gcc/target_cpp.cmake)
 include(${ZEPHYR_BASE}/cmake/compiler/gcc/target_asm.cmake)
 include(${ZEPHYR_BASE}/cmake/compiler/gcc/target_baremetal.cmake)

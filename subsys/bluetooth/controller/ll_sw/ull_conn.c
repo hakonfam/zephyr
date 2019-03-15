@@ -1456,7 +1456,7 @@ static inline void event_conn_upd_init(struct ll_conn *conn,
 #if defined(CONFIG_BT_CTLR_XTAL_ADVANCED)
 		if (conn->evt.ticks_xtal_to_start & XON_BITMASK) {
 			u32_t ticks_prepare_to_start =
-				max(conn->evt.ticks_active_to_start,
+				MAX(conn->evt.ticks_active_to_start,
 				    conn->evt.ticks_preempt_to_start);
 
 			conn->llcp.conn_upd.ticks_anchor -=
@@ -1624,7 +1624,7 @@ static inline int event_conn_upd_prep(struct ll_conn *conn,
 		/* restore to normal prepare */
 		if (conn->evt.ticks_xtal_to_start & XON_BITMASK) {
 			u32_t ticks_prepare_to_start =
-				max(conn->evt.ticks_active_to_start,
+				MAX(conn->evt.ticks_active_to_start,
 				    conn->evt.ticks_preempt_to_start);
 
 			conn->evt.ticks_xtal_to_start &= ~XON_BITMASK;
@@ -1649,7 +1649,7 @@ static inline int event_conn_upd_prep(struct ll_conn *conn,
 		lll->latency_prepare -= (instant_latency - latency);
 
 		/* calculate the offset, window widening and interval */
-		ticks_slot_offset = max(conn->evt.ticks_active_to_start,
+		ticks_slot_offset = MAX(conn->evt.ticks_active_to_start,
 					conn->evt.ticks_xtal_to_start);
 		conn_interval_us = conn->llcp.conn_upd.interval * 1250;
 		periodic_us = conn_interval_us;
@@ -2168,7 +2168,7 @@ static inline void event_conn_param_req(struct ll_conn *conn,
 #if defined(CONFIG_BT_CTLR_XTAL_ADVANCED)
 		if (conn->evt.ticks_xtal_to_start & XON_BITMASK) {
 			u32_t ticks_prepare_to_start =
-				max(conn->evt.ticks_active_to_start,
+				MAX(conn->evt.ticks_active_to_start,
 				    conn->evt.ticks_preempt_to_start);
 
 			conn->llcp_conn_param.ticks_ref -=

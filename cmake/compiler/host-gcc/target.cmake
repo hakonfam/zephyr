@@ -79,6 +79,7 @@ endforeach()
 # Significant overlap with freestanding gcc compiler so reuse it
 include(${ZEPHYR_BASE}/cmake/compiler/gcc/target_security_fortify.cmake)
 include(${ZEPHYR_BASE}/cmake/compiler/gcc/target_security_canaries.cmake)
+include(${ZEPHYR_BASE}/cmake/compiler/gcc/target_optimizations.cmake)
 include(${ZEPHYR_BASE}/cmake/compiler/gcc/target_cpp.cmake)
 include(${ZEPHYR_BASE}/cmake/compiler/gcc/target_asm.cmake)
 include(${ZEPHYR_BASE}/cmake/compiler/gcc/target_baremetal.cmake)

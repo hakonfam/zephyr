@@ -51,10 +51,6 @@ endif()
 define_property(GLOBAL PROPERTY ${IMAGE}ZEPHYR_LIBS
     BRIEF_DOCS "Image-global list of all Zephyr CMake libs that should be linked in"
     FULL_DOCS  "Image-global list of all Zephyr CMake libs that should be linked in
-
-define_property(GLOBAL PROPERTY ${IMAGE}ZEPHYR_LIBS
-    BRIEF_DOCS "Image-global list of all Zephyr CMake libs that should be linked in"
-    FULL_DOCS  "Image-global list of all Zephyr CMake libs that should be linked in
 zephyr_library() appends libs to this list.")
 set_property(GLOBAL PROPERTY ${IMAGE}ZEPHYR_LIBS "")
 

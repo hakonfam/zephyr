@@ -477,7 +477,7 @@ static void dhcpv4_enter_bound(struct net_if *iface)
 		renewal_time, rebinding_time);
 
 	iface->config.dhcpv4.timer_start = k_uptime_get();
-	iface->config.dhcpv4.request_time = min(renewal_time, rebinding_time);
+	iface->config.dhcpv4.request_time = MIN(renewal_time, rebinding_time);
 
 	dhcpv4_update_timeout_work(iface->config.dhcpv4.request_time);
 }
@@ -518,7 +518,7 @@ static u32_t dhcph4_manage_timers(struct net_if *iface, s64_t timeout)
 			return dhcpv4_send_request(iface);
 		}
 
-		return min(iface->config.dhcpv4.renewal_time,
+		return MIN(iface->config.dhcpv4.renewal_time,
 			   iface->config.dhcpv4.rebinding_time);
 	case NET_DHCPV4_RENEWING:
 	case NET_DHCPV4_REBINDING:

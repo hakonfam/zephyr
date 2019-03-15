@@ -17,9 +17,7 @@
 #include <autoconf.h>
 #include <linker/sections.h>
 #include <generated_dts_board.h>
-#ifdef USE_PARTITION_MANAGER
-#include <override.h>
-#endif
+
 #include <linker/linker-defs.h>
 #include <linker/linker-tool.h>
 
@@ -61,11 +59,6 @@
 		#define RAM_SIZE (CONFIG_BOOTLOADER_SRAM_SIZE * 1K)
 		#define RAM_ADDR (CONFIG_SRAM_BASE_ADDRESS + \
 			(CONFIG_SRAM_SIZE * 1K - RAM_SIZE))
-	#elif defined(CONFIG_MULTI_IMAGE_SHARED_SRAM)
-		#define RAM_SIZE (CONFIG_SRAM_SIZE * 1K - CONFIG_SHARED_SRAM_SIZE * 1K)
-		#define RAM_ADDR CONFIG_SRAM_BASE_ADDRESS
-		#define SHARED_RAM_ADDR (CONFIG_SRAM_BASE_ADDRESS + RAM_SIZE)
-		#define SHARED_RAM_SIZE (CONFIG_SHARED_SRAM_SIZE * 1K)
 	#else
 		#define RAM_SIZE (CONFIG_SRAM_SIZE * 1K)
 		#define RAM_ADDR CONFIG_SRAM_BASE_ADDRESS
@@ -104,9 +97,7 @@ MEMORY
     CCM                   (rw) : ORIGIN = DT_CCM_BASE_ADDRESS, LENGTH = DT_CCM_SIZE * 1K
 #endif
     SRAM                  (wx) : ORIGIN = RAM_ADDR, LENGTH = RAM_SIZE
-#ifdef CONFIG_MULTI_IMAGE_SHARED_SRAM
-	SHARED_SRAM           (wx) : ORIGIN = SHARED_RAM_ADDR, LENGTH = SHARED_RAM_SIZE
-#endif
+
     /* Used by and documented in include/linker/intlist.ld */
     IDT_LIST  (wx)      : ORIGIN = (RAM_ADDR + RAM_SIZE), LENGTH = 2K
     }
@@ -181,11 +172,6 @@ SECTIONS
 	KEEP(*(".kinetis_flash_config.*"))
 
 	_vector_end = .;
-
-#if defined(CONFIG_SB_FIRMWARE_INFO_OFFSET) && defined(CONFIG_SECURE_BOOT)
-	. = CONFIG_SB_FIRMWARE_INFO_OFFSET;
-	KEEP(*(.firmware_info))
-#endif
 	} GROUP_LINK_IN(ROMABLE_REGION)
 
 #ifdef CONFIG_CODE_DATA_RELOCATION

@@ -40,7 +40,6 @@ source "ext/Kconfig"
 
 source "$(CMAKE_BINARY_DIR)/Kconfig.modules"
 
-source "$(CMAKE_BINARY_DIR)/Kconfig.modules"
 
 orsource "../nrf/Kconfig.nrf"
 menu "Build and Link Features"
