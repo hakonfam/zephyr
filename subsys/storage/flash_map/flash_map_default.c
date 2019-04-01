@@ -7,15 +7,40 @@
 
 #include <zephyr.h>
 #include <flash_map.h>
+#include <pm_config.h>
 
-#define FLASH_AREA_FOO(i, _)				\
-	{.fa_id = i,					\
-	 .fa_off = DT_FLASH_AREA_##i##_OFFSET,		\
-	 .fa_dev_name = DT_FLASH_AREA_##i##_DEV,	\
-	 .fa_size = DT_FLASH_AREA_##i##_SIZE,},
+#define IMAGE_SIZE ((PM_CFG_FLASH_SIZE - PM_CFG_MCUBOOT_SIZE - \
+			PM_CFG_MCUBOOT_SCRATCH_SIZE - \
+			PM_CFG_MCUBOOT_STORAGE_SIZE)/2)
 
 const struct flash_area default_flash_map[] = {
-	UTIL_LISTIFY(DT_FLASH_AREA_NUM, FLASH_AREA_FOO, ~)
+	{
+		.fa_id = 0,
+		.fa_off = PM_CFG_MCUBOOT_ADDRESS,
+		.fa_dev_name = DT_FLASH_AREA_0_DEV,
+		.fa_size = PM_CFG_MCUBOOT_SIZE,
+	},{
+		.fa_id = 1,
+		.fa_off = PM_CFG_MCUBOOT_ADDRESS + PM_CFG_MCUBOOT_SIZE,
+		.fa_dev_name = DT_FLASH_AREA_0_DEV,
+		.fa_size = IMAGE_SIZE,
+	},{
+		.fa_id = 2,
+		.fa_off = PM_CFG_MCUBOOT_ADDRESS + PM_CFG_MCUBOOT_SIZE +
+			IMAGE_SIZE,
+		.fa_dev_name = DT_FLASH_AREA_0_DEV,
+		.fa_size = IMAGE_SIZE,
+	},{
+		.fa_id = 3,
+		.fa_off = PM_CFG_MCUBOOT_SCRATCH_ADDRESS,
+		.fa_dev_name = DT_FLASH_AREA_0_DEV,
+		.fa_size = PM_CFG_MCUBOOT_SCRATCH_SIZE,
+	},{
+		.fa_id = 4,
+		.fa_off = PM_CFG_MCUBOOT_STORAGE_ADDRESS,
+		.fa_dev_name = DT_FLASH_AREA_0_DEV,
+		.fa_size = PM_CFG_MCUBOOT_STORAGE_SIZE,
+	},
 };
 
 const int flash_map_entries = ARRAY_SIZE(default_flash_map);
