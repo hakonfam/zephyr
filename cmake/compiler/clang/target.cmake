@@ -61,7 +61,14 @@ if(NOT "${ARCH}" STREQUAL "posix")
   assert_exists(LIBGCC_DIR)
 
   list(APPEND LIB_INCLUDE_DIR "-L\"${LIBGCC_DIR}\"")
-  list(APPEND TOOLCHAIN_LIBS gcc)
+  list(APPEND TOOLCHAIN_LIBS $<TARGET_PROPERTY:zephyr_property_target,c_runtime_library>)
+
+  set_property(TARGET
+    zephyr_property_target
+    PROPERTY
+    c_runtime_library
+    "gcc"
+    )
 
   set(CMAKE_REQUIRED_FLAGS -nostartfiles -nostdlib ${isystem_include_flags} -Wl,--unresolved-symbols=ignore-in-object-files)
   string(REPLACE ";" " " CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")

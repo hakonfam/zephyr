@@ -73,7 +73,17 @@ if(NOT no_libgcc)
   assert_exists(LIBGCC_DIR)
 
   LIST(APPEND LIB_INCLUDE_DIR "-L\"${LIBGCC_DIR}\"")
-  LIST(APPEND TOOLCHAIN_LIBS gcc)
+  LIST(APPEND TOOLCHAIN_LIBS $<TARGET_PROPERTY:zephyr_property_target,c_runtime_library>)
+
+  # TODO: Apply the same change to more target.cmake files.
+
+  set_property(TARGET
+    zephyr_property_target
+    PROPERTY
+    c_runtime_library
+    "gcc"
+    )
+
 endif()
 
 if(SYSROOT_DIR)
