@@ -80,6 +80,13 @@ set(ZEPHYR_BINARY_DIR ${PROJECT_BINARY_DIR})
 set(ZEPHYR_BASE ${PROJECT_SOURCE_DIR})
 set(ENV{ZEPHYR_BASE}   ${ZEPHYR_BASE})
 
+# General purpose Zephyr target.
+# This target can be used for custom zephyr settings that needs to be used elsewhere in the build system
+#
+# Currently used properties:
+# - COMPILES_OPTIONS: Used by application memory partition feature
+add_custom_target(zephyr_property_target)
+
 set(AUTOCONF_H ${__build_dir}/include/generated/autoconf.h)
 # Re-configure (Re-execute all CMakeLists.txt code) when autoconf.h changes
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${AUTOCONF_H})
@@ -527,13 +534,6 @@ if(CONFIG_QEMU_TARGET)
     )
   endif()
 endif()
-
-# General purpose Zephyr target.
-# This target can be used for custom zephyr settings that needs to be used elsewhere in the build system
-#
-# Currently used properties:
-# - COMPILES_OPTIONS: Used by application memory partition feature
-add_custom_target(zephyr_property_target)
 
 # "app" is a CMake library containing all the application code and is
 # modified by the entry point ${APPLICATION_SOURCE_DIR}/CMakeLists.txt
