@@ -1,0 +1,9 @@
+config C_RUNTIME_SEGGER
+	bool "Use the C runtime library from SEGGER"
+	depends on CPU_CORTEX_M
+	depends on ! NEWLIB_LIBC
+	depends on EXTERNAL_LIBC
+	help
+	  Use the C runtime library provided by SEGGER. This library has a
+	  different license from GCC and has different code size and
+	  runtime characteristics.

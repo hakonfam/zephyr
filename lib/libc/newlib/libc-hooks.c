@@ -16,6 +16,7 @@
 #include <app_memory/app_memdomain.h>
 #include <init.h>
 #include <sys/sem.h>
+#include <stdout_hook.h>
 
 #define LIBC_BSS	K_APP_BMEM(z_libc_partition)
 #define LIBC_DATA	K_APP_DMEM(z_libc_partition)
@@ -94,20 +95,6 @@ SYS_INIT(malloc_prepare, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
 #endif /* CONFIG_NEWLIB_LIBC_ALIGNED_HEAP_SIZE */
 
 LIBC_BSS static unsigned int heap_sz;
-
-static int _stdout_hook_default(int c)
-{
-	(void)(c);  /* Prevent warning about unused argument */
-
-	return EOF;
-}
-
-static int (*_stdout_hook)(int) = _stdout_hook_default;
-
-void __stdout_hook_install(int (*hook)(int))
-{
-	_stdout_hook = hook;
-}
 
 static unsigned char _stdin_hook_default(void)
 {

@@ -17,4 +17,6 @@ source "lib/posix/Kconfig"
 
 source "lib/updatehub/Kconfig"
 
+source "lib/low_level_c_runtime_library/Kconfig"
+
 endmenu

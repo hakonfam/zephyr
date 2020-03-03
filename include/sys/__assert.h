@@ -9,6 +9,10 @@
 
 #include <stdbool.h>
 
+#if defined(CONFIG_ASSERT_VERBOSE)
+#include <sys/printk.h>
+#endif
+
 #ifdef CONFIG_ASSERT
 #ifndef __ASSERT_ON
 #define __ASSERT_ON CONFIG_ASSERT_LEVEL
@@ -62,8 +66,6 @@
 #endif
 
 #if __ASSERT_ON
-
-#include <sys/printk.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -27,3 +27,5 @@ zephyr_sources_if_kconfig(ring_buffer.c)
 zephyr_sources_ifdef(CONFIG_ASSERT assert.c)
 
 zephyr_sources_ifdef(CONFIG_USERSPACE mutex.c)
+
+zephyr_sources_ifdef(CONFIG_STDOUT_CONSOLE stdout_hook_install.c)
