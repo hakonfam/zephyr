@@ -70,6 +70,23 @@ typedef __UINT_LEAST64_TYPE__	uint_least64_t;
 typedef __INTPTR_TYPE__		intptr_t;
 typedef __UINTPTR_TYPE__	uintptr_t;
 
+#ifdef __INT8_C
+// The INT8_C macro and friends are only available when __INT8_C and
+// friends have been supplied. __INT8_C is typically supplied by the
+// compiler.
+
+#define INT8_C(x)  __INT8_C(x)
+#define INT16_C(x) __INT16_C(x)
+#define INT32_C(x) __INT32_C(x)
+#define INT64_C(x) __INT64_C(x)
+
+#define UINT8_C(x)  __UINT8_C(x)
+#define UINT16_C(x) __UINT16_C(x)
+#define UINT32_C(x) __UINT32_C(x)
+#define UINT64_C(x) __UINT64_C(x)
+
+#endif // __INT8_C
+
 #ifdef __cplusplus
 }
 #endif
