@@ -210,8 +210,6 @@ set(arm_SOURCES
   arm/umodsi3.S
   )
 
-filter_builtin_sources(arm_SOURCES EXCLUDE arm_SOURCES "${arm_SOURCES};${GENERIC_SOURCES}")
-
 set(arm_EABI_SOURCES
   arm/aeabi_cdcmp.S
   arm/aeabi_cdcmpeq_check_nan.c
@@ -232,10 +230,28 @@ set(arm_EABI_SOURCES
   arm/aeabi_uldivmod.S
   )
 
-set(srcs
-  ${arm_SOURCES}
-  ${arm_EABI_SOURCES}
-  )
+set(thumb1_SOURCES
+  arm/divsi3.S
+  arm/udivsi3.S
+  arm/comparesf2.S
+  arm/addsf3.S
+)
+
+filter_builtin_sources(arm_SOURCES    EXCLUDE arm_SOURCES    "${arm_SOURCES};${GENERIC_SOURCES}")
+
+filter_builtin_sources(thumb1_SOURCES EXCLUDE thumb1_SOURCES "${thumb1_SOURCES};${GENERIC_SOURCES}")
+
+if(CONFIG_CPU_CORTEX_M0 OR CONFIG_CPU_CORTEX_M0PLUS)
+  set(srcs
+    ${thumb1_SOURCES}
+    ${arm_EABI_SOURCES}
+    )
+else()
+  set(srcs
+    ${arm_SOURCES}
+    ${arm_EABI_SOURCES}
+    )
+endif()
 
 foreach(src ${srcs})
   zephyr_library_sources(
