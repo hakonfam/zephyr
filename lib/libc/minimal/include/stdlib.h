@@ -10,6 +10,8 @@
 #define ZEPHYR_LIB_LIBC_MINIMAL_INCLUDE_STDLIB_H_
 
 #include <stddef.h>
+#include <toolchain.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -37,6 +39,8 @@ static inline void exit(int status)
 }
 
 int rand(void);
+
+FUNC_NORETURN void abort(void);
 
 #define abs(x) ((x) < 0 ? -(x) : (x))
 
