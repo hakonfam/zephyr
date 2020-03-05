@@ -67,7 +67,8 @@ if(NOT "${ARCH}" STREQUAL "posix")
     zephyr_property_target
     PROPERTY
     c_runtime_library
-    "gcc"
+#    "gcc"
+    "" # TODO: Fix
     )
 
   set(CMAKE_REQUIRED_FLAGS -nostartfiles -nostdlib ${isystem_include_flags} -Wl,--unresolved-symbols=ignore-in-object-files)
