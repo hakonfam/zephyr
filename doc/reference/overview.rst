@@ -239,6 +239,11 @@ current :ref:`stability level <api_lifecycle>`.
      - 1.11
      - 2.1
 
+   * - :ref:`flash_buffered_write`
+     - Experimental
+     - 2.3
+     - 2.3
+
    * - :ref:`flash_map_api`
      - Stable
      - 1.11

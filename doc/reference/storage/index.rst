@@ -11,3 +11,4 @@ Storage
    disk/sdhc.rst
    flash_map/flash_map.rst
    fcb/fcb.rst
+   flash_buffered_write/flash_buffered_write.rst
