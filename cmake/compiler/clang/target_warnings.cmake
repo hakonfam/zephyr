@@ -14,6 +14,9 @@ macro(toolchain_cc_warning_base)
 
   zephyr_cc_option(-Wno-pointer-sign)
 
+  # TODO: Fix warnings
+  zephyr_cc_option(-Wno-uninitialized)
+
   # Prohibit void pointer arithmetic. Illegal in C99
   zephyr_cc_option(-Wpointer-arith)
 
