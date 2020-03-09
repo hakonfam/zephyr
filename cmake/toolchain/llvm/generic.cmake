@@ -30,3 +30,7 @@ set(CMAKE_CXX_COMPILER_TARGET ${triple})
 if("${ARCH}" STREQUAL "posix")
   set(TOOLCHAIN_HAS_NEWLIB OFF CACHE BOOL "True if toolchain supports newlib")
 endif()
+
+if(DEFINED ENV{ZEPHYR_TOOLCHAIN_ARMCLANG})
+  set(ARMCLANG 1)
+endif()
