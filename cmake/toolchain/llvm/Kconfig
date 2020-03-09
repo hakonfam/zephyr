@@ -1,0 +1,15 @@
+config TOOLCHAIN_LLVM
+	bool
+	default y
+	select NO_KERNEL_WEAK_MAIN
+
+# TODO: armclang will add the symbol 'use_no_argv' to the object file
+# when it finds an implementation of 'main' that does not have any
+# arguments. It does this so that 'armlink' can choose libraries that
+# don't support parsing of argv. So far so good.
+#
+# The problem is that when there exists both a weak and non-weak
+# implementation of main you will get a multiple definition error on
+# two symbols called 'use_no_argv'.
+#
+# Compiler bug? Workaround this by removing this definition of main.

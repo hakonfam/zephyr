@@ -764,4 +764,11 @@ config TICKLESS_KERNEL
 
 source "kernel/Kconfig.power_mgmt"
 
+config NO_KERNEL_WEAK_MAIN
+	bool
+	help
+	  Omit the weak main function that just does NOP. Configurable
+	  because some toolchains struggle with multiple main definitions,
+	  even when weak.
+
 endmenu

@@ -293,11 +293,13 @@ static void bg_thread_main(void *unused1, void *unused2, void *unused3)
 
 /* LCOV_EXCL_START */
 
+#ifndef CONFIG_NO_KERNEL_WEAK_MAIN
 void __weak main(void)
 {
 	/* NOP default main() if the application does not provide one. */
 	arch_nop();
 }
+#endif
 
 /* LCOV_EXCL_STOP */
 
