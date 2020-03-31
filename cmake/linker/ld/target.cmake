@@ -1,6 +1,23 @@
 # SPDX-License-Identifier: Apache-2.0
 
-find_program(CMAKE_LINKER     ${CROSS_COMPILE}ld      PATH ${TOOLCHAIN_HOME} NO_DEFAULT_PATH)
+if(ARMCLANG)
+  # TODO: Move this?
+  set(CMAKE_C_LINK_EXECUTABLE
+    "<CMAKE_LINKER> <FLAGS> <CMAKE_C_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>"
+    )
+
+  # TODO: Fix
+  # TODO: Use Clang's linker?
+  find_program(CMAKE_LINKER     /home/sebo/Downloads/gcc-arm-none-eabi-9-2019-q4-major/bin/arm-none-eabi-gcc      PATH ${TOOLCHAIN_HOME} NO_DEFAULT_PATH)
+
+  set(armclang_flags
+    --target=arm-arm-none-eabi
+    -mcpu=cortex-m4 # Suppresses warning about unsupported arch
+    )
+else()
+  find_program(CMAKE_LINKER     ${CROSS_COMPILE}ld      PATH ${TOOLCHAIN_HOME} NO_DEFAULT_PATH)
+endif(ARMCLANG)
+
 
 set_ifndef(LINKERFLAGPREFIX -Wl)
 
@@ -49,6 +66,7 @@ macro(configure_linker_script linker_script_gen linker_pass_define)
     -E ${LINKER_SCRIPT}
     -P # Prevent generation of debug `#line' directives.
     -o ${linker_script_gen}
+    ${armclang_flags}
     VERBATIM
     WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
   )

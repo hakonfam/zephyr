@@ -10,7 +10,9 @@ macro(toolchain_ld_base)
 
   # TOOLCHAIN_LD_FLAGS comes from compiler/gcc/target.cmake
   # LINKERFLAGPREFIX comes from linker/ld/target.cmake
-  zephyr_ld_options(
+  # TODO: Should --gc-sections be optional?
+  # TODO: Is the compatiblity check of gc-sections broken?
+  zephyr_link_libraries(
     ${TOOLCHAIN_LD_FLAGS}
     ${LINKERFLAGPREFIX},--gc-sections
     ${LINKERFLAGPREFIX},--build-id=none

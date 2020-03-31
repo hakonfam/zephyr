@@ -8,10 +8,11 @@ if(DEFINED TOOLCHAIN_HOME)
 endif()
 
 find_program(CMAKE_AR      llvm-ar      ${find_program_clang_args}   )
-find_program(CMAKE_NM      llvm-nm      ${find_program_clang_args}   )
-find_program(CMAKE_OBJDUMP llvm-objdump ${find_program_clang_args}   )
+find_program(CMAKE_NM      /home/sebo/Downloads/gcc-arm-none-eabi-9-2019-q4-major/bin/arm-none-eabi-nm      ${find_program_clang_args}   )
+find_program(CMAKE_OBJDUMP /home/sebo/Downloads/gcc-arm-none-eabi-9-2019-q4-major/bin/arm-none-eabi-objdump ${find_program_clang_args}   )
 find_program(CMAKE_RANLIB  llvm-ranlib  ${find_program_clang_args}   )
-find_program(CMAKE_OBJCOPY objcopy      ${find_program_binutils_args})
+find_program(CMAKE_OBJCOPY /home/sebo/Downloads/gcc-arm-none-eabi-9-2019-q4-major/bin/arm-none-eabi-objcopy ${find_program_binutils_args})
+# TODO: Fix
 find_program(CMAKE_READELF readelf      ${find_program_binutils_args})
 
 # Use the gnu binutil abstraction macros

@@ -466,6 +466,17 @@ include(${BOARD_DIR}/pre_dt_board.cmake OPTIONAL)
 # both DT and Kconfig we complete the target-specific configuration,
 # and possibly change the toolchain.
 include(${ZEPHYR_BASE}/cmake/zephyr_module.cmake)
+
+set(non_clang_boards
+  mps2_an521
+  qemu_cortex_r5
+  qemu_cortex_a53
+  )
+
+if(${BOARD} IN_LIST non_clang_boards)
+  set(ENV{ZEPHYR_TOOLCHAIN_VARIANT} zephyr)
+endif()
+
 include(${ZEPHYR_BASE}/cmake/generic_toolchain.cmake)
 include(${ZEPHYR_BASE}/cmake/dts.cmake)
 include(${ZEPHYR_BASE}/cmake/kconfig.cmake)

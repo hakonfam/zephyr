@@ -15,15 +15,21 @@ if(DEFINED TOOLCHAIN_HOME)
   set(find_program_clang_args PATH ${TOOLCHAIN_HOME} NO_DEFAULT_PATH)
 endif()
 
-find_program(CMAKE_C_COMPILER   clang   ${find_program_clang_args})
+# TODO: Fix
+find_program(CMAKE_C_COMPILER   $ENV{HOME}/developmentstudio-2019.1/sw/ARMCompiler6.13/bin/armclang   ${find_program_clang_args})
 find_program(CMAKE_CXX_COMPILER clang++ ${find_program_clang_args})
 
 if(NOT "${ARCH}" STREQUAL "posix")
   include(${ZEPHYR_BASE}/cmake/gcc-m-cpu.cmake)
 
+  unset(armclang_target_flag)
   if("${ARCH}" STREQUAL "arm")
+    # TODO: Only when 'armclang'
+    set(armclang_target_flag --target=arm-arm-none-eabi)
+
     list(APPEND TOOLCHAIN_C_FLAGS
       -fshort-enums
+      ${armclang_target_flag}
       )
     list(APPEND TOOLCHAIN_LD_FLAGS
       -fshort-enums
@@ -54,24 +60,44 @@ if(NOT "${ARCH}" STREQUAL "posix")
     OUTPUT_STRIP_TRAILING_WHITESPACE
     )
 
-  assert_exists(LIBGCC_FILE_NAME)
+#  assert_exists(LIBGCC_FILE_NAME)
 
   get_filename_component(LIBGCC_DIR ${LIBGCC_FILE_NAME} DIRECTORY)
 
-  assert_exists(LIBGCC_DIR)
+#  assert_exists(LIBGCC_DIR)
 
   list(APPEND LIB_INCLUDE_DIR "-L\"${LIBGCC_DIR}\"")
   list(APPEND TOOLCHAIN_LIBS $<TARGET_PROPERTY:zephyr_property_target,c_runtime_library>)
+
+  if(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
+    set(arch_attr p)
+  else()
+    # It is not clear if 'w' is correct, it could be p, or r instead.
+    set(arch_attr w)
+  endif()
 
   set_property(TARGET
     zephyr_property_target
     PROPERTY
     c_runtime_library
 #    "gcc"
-    "" # TODO: Fix
+    "$ENV{ZEPHYR_TOOLCHAIN_ARM_COMPILER_6_DIR}/lib/armlib/c_${arch_attr}.l" # TODO: Fix
     )
 
-  set(CMAKE_REQUIRED_FLAGS -nostartfiles -nostdlib ${isystem_include_flags} -Wl,--unresolved-symbols=ignore-in-object-files)
+  set(CMAKE_REQUIRED_FLAGS -nostartfiles -nostdlib ${isystem_include_flags})
+
+  # Ignore that __main is undefined.
+  if(ARMCLANG)
+    list(APPEND CMAKE_REQUIRED_FLAGS
+      ${armclang_target_flag}
+      -Xlinker --partial
+      )
+  else()
+    list(APPEND CMAKE_REQUIRED_FLAGS
+      -Wl,--unresolved-symbols=ignore-in-object-files
+      )
+  endif(ARMCLANG)
+
   string(REPLACE ";" " " CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
 
 endif()
