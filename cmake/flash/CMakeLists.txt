@@ -8,9 +8,9 @@ function(runner_yml_write content)
   # We define this function here to have access to the `flash` target.
 
   set_property(
-    TARGET         runner_yml_props_target
+    TARGET         flash
     APPEND_STRING
-    PROPERTY       yaml_contents
+    PROPERTY       runner_yaml_contents
     "${content}\n"
     )
 endfunction()
@@ -79,10 +79,74 @@ function(create_runners_yaml)
 
   # Write the final contents and set its location in the cache.
   file(GENERATE OUTPUT "${runners_yaml}" CONTENT
-    $<TARGET_PROPERTY:runner_yml_props_target,yaml_contents>)
+    $<TARGET_PROPERTY:flash,runner_yaml_contents>)
   set(ZEPHYR_RUNNERS_YAML "${runners_yaml}" CACHE INTERNAL
     "a configuration file for the runners Python package")
 endfunction()
+
+if(DEFINED ENV{WEST_DIR} AND NOT WEST_DIR)
+  set(WEST_DIR $ENV{WEST_DIR})
+endif(DEFINED ENV{WEST_DIR} AND NOT WEST_DIR)
+
+if(WEST_DIR)
+  set(WEST "PYTHONPATH=${WEST_DIR}/src" "${PYTHON_EXECUTABLE};${WEST_DIR}/src/west/app/main.py;--zephyr-base=${ZEPHYR_BASE} ")
+endif()
+
+# Generate the flash, debug, debugserver, attach targets within the build
+# system itself.
+foreach(target flash debug debugserver attach)
+  if(target STREQUAL flash)
+    set(comment "Flashing ${BOARD}")
+  elseif(target STREQUAL debug)
+    set(comment "Debugging ${BOARD}")
+  elseif(target STREQUAL debugserver)
+    set(comment "Debugging ${BOARD}")
+    if(EMU_PLATFORM)
+      # cmake/qemu/CMakeLists.txt will add a debugserver target for
+      # emulation platforms, so we don't add one here
+      continue()
+    endif()
+  elseif(target STREQUAL attach)
+    set(comment "Debugging ${BOARD}")
+  endif()
+
+  list(APPEND FLASH_DEPS ${logical_target_for_zephyr_elf})
+
+  # Enable verbose output, if requested.
+  if(CMAKE_VERBOSE_MAKEFILE)
+    set(RUNNER_VERBOSE "--verbose")
+  else()
+    set(RUNNER_VERBOSE)
+  endif()
+
+  # We pass --skip-rebuild here because the DEPENDS value ensures the
+  # build is already up to date before west is run.
+  if(WEST)
+    set(cmd
+      ${CMAKE_COMMAND} -E env
+      ${WEST}
+      ${RUNNER_VERBOSE}
+      ${target}
+      --skip-rebuild
+      DEPENDS ${FLASH_DEPS}
+      WORKING_DIRECTORY ${APPLICATION_BINARY_DIR}
+      )
+
+    add_custom_target(${target}
+      COMMAND
+      ${cmd}
+      COMMENT
+      ${comment}
+      USES_TERMINAL
+      )
+  else()
+    add_custom_target(${target}
+      COMMAND ${CMAKE_COMMAND} -E echo \"West was not found in path. To support
+          '${CMAKE_MAKE_PROGRAM} ${target}', please create a west workspace.\"
+      USES_TERMINAL
+      )
+  endif(WEST)
+endforeach()
 
 get_property(RUNNERS GLOBAL PROPERTY ZEPHYR_RUNNERS)
 
@@ -153,67 +217,3 @@ if(BOARD_DEBUG_RUNNER)
   set(ZEPHYR_BOARD_DEBUG_RUNNER ${BOARD_DEBUG_RUNNER} CACHE STRING
     "Default runner for debugging" FORCE)
 endif()
-
-if(DEFINED ENV{WEST_DIR} AND NOT WEST_DIR)
-  set(WEST_DIR $ENV{WEST_DIR})
-endif(DEFINED ENV{WEST_DIR} AND NOT WEST_DIR)
-
-if(WEST_DIR)
-  set(WEST "PYTHONPATH=${WEST_DIR}/src" "${PYTHON_EXECUTABLE};${WEST_DIR}/src/west/app/main.py;--zephyr-base=${ZEPHYR_BASE} ")
-endif()
-
-# Generate the flash, debug, debugserver, attach targets within the build
-# system itself.
-foreach(target flash debug debugserver attach)
-  if(target STREQUAL flash)
-    set(comment "Flashing ${BOARD}")
-  elseif(target STREQUAL debug)
-    set(comment "Debugging ${BOARD}")
-  elseif(target STREQUAL debugserver)
-    set(comment "Debugging ${BOARD}")
-    if(EMU_PLATFORM)
-      # cmake/qemu/CMakeLists.txt will add a debugserver target for
-      # emulation platforms, so we don't add one here
-      continue()
-    endif()
-  elseif(target STREQUAL attach)
-    set(comment "Debugging ${BOARD}")
-  endif()
-
-  list(APPEND FLASH_DEPS ${logical_target_for_zephyr_elf})
-
-  # Enable verbose output, if requested.
-  if(CMAKE_VERBOSE_MAKEFILE)
-    set(RUNNER_VERBOSE "--verbose")
-  else()
-    set(RUNNER_VERBOSE)
-  endif()
-
-  # We pass --skip-rebuild here because the DEPENDS value ensures the
-  # build is already up to date before west is run.
-  if(WEST)
-    set(cmd
-      ${CMAKE_COMMAND} -E env
-      ${WEST}
-      ${RUNNER_VERBOSE}
-      ${target}
-      --skip-rebuild
-      DEPENDS ${FLASH_DEPS}
-      WORKING_DIRECTORY ${APPLICATION_BINARY_DIR}
-      )
-
-    add_custom_target(${target}
-      COMMAND
-      ${cmd}
-      COMMENT
-      ${comment}
-      USES_TERMINAL
-      )
-  else()
-    add_custom_target(${target}
-      COMMAND ${CMAKE_COMMAND} -E echo \"West was not found in path. To support
-          '${CMAKE_MAKE_PROGRAM} ${target}', please create a west workspace.\"
-      USES_TERMINAL
-      )
-  endif(WEST)
-endforeach()
