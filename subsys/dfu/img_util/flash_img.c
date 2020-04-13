@@ -10,7 +10,7 @@
 #include <string.h>
 #include <dfu/flash_img.h>
 #include <storage/flash_map.h>
-#include <storage/fbw.h>
+#include <storage/fsw.h>
 
 #ifdef CONFIG_IMG_ERASE_PROGRESSIVELY
 #include <dfu/mcuboot.h>
@@ -33,13 +33,13 @@ int flash_img_buffered_write(struct flash_img_context *ctx, u8_t *data,
 {
 	int rc;
 
-	rc = fbw_write(&ctx->fbw, data, len, flush);
+	rc = fsw_buffered_write(&ctx->fsw, data, len, flush);
 	if (!flush) {
 		return rc;
 	}
 
 #ifdef CONFIG_IMG_ERASE_PROGRESSIVELY
-	rc = fbw_erase_page(&ctx->fbw,
+	rc = fsw_erase_page(&ctx->fsw,
 		       ctx->flash_area->fa_off +
 		       BOOT_TRAILER_IMG_STATUS_OFFS(ctx->flash_area));
 	if (rc) {
@@ -55,7 +55,7 @@ int flash_img_buffered_write(struct flash_img_context *ctx, u8_t *data,
 
 size_t flash_img_bytes_written(struct flash_img_context *ctx)
 {
-	return fbw_bytes_written(&ctx->fbw);
+	return fsw_bytes_written(&ctx->fsw);
 }
 
 int flash_img_init_id(struct flash_img_context *ctx, u8_t area_id)
@@ -71,7 +71,7 @@ int flash_img_init_id(struct flash_img_context *ctx, u8_t area_id)
 
 	flash_dev = flash_area_get_device(ctx->flash_area);
 
-	return fbw_init(&ctx->fbw, flash_dev, ctx->buf,
+	return fsw_init(&ctx->fsw, flash_dev, ctx->buf,
 			CONFIG_IMG_BLOCK_BUF_SIZE, ctx->flash_area->fa_off,
 			ctx->flash_area->fa_size, NULL);
 }

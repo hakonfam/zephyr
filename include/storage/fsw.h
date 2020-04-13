@@ -7,16 +7,16 @@
 
 /**
  * @file
- * @brief Public API for flash buffered writes
+ * @brief Public API for flash stream writes
  */
 
-#ifndef ZEPHYR_INCLUDE_STORAGE_FBW_H_
-#define ZEPHYR_INCLUDE_STORAGE_FBW_H_
+#ifndef ZEPHYR_INCLUDE_STORAGE_FSW_H_
+#define ZEPHYR_INCLUDE_STORAGE_FSW_H_
 
 /**
- * @brief Abstraction over flash buffered writes.
+ * @brief Abstraction over flash stream writes.
  *
- * @defgroup fbw flash buffered write Interface
+ * @defgroup fsw flash stream write Interface
  * @{
  */
 
@@ -28,59 +28,37 @@ extern "C" {
 #endif
 
 /**
- * @typedef fbw_callback_t
- *
- * @brief Signature for callback invoked after flash write completes.
- *
- * @details Functions of this type are invoked with a buffer containing
- * data read back from the flash after a flash write has completed.
- * This enables verifying that the data has been correctly stored (for
- * instance by using a SHA function). The write buffer 'buf' provided in
- * fbw_init is used as a read buffer for this purpose.
- *
- * @param buf Pointer to the data read.
- * @param len The length of the data read.
- * @param offset The offset the data was read from.
- */
-typedef int (*fbw_callback_t)(u8_t *buf, size_t len, size_t offset);
-
-/**
- * @brief Structure for flash buffered writes
+ * @brief Structure for flash stream writes
  *
  * Users should treat these structures as opaque values and only interact
  * with them through the below API.
  */
-struct fbw_ctx {
-	u8_t *buf; /* Write buffer */
-	size_t buf_len; /* Length of write buffer */
-	size_t buf_bytes; /* Number of bytes currently stored in write buf */
+struct fsw_ctx {
 	struct device *fdev; /* Flash device */
-	size_t bytes_written; /* Number of bytes written to flash */
 	size_t offset; /* Offset from base of flash device to write area */
 	size_t available; /* Available bytes in write area */
-	fbw_callback_t callback; /* Callback invoked on completed write op */
-#ifdef CONFIG_FBW_ERASE
+#ifdef CONFIG_FSW_ERASE
 	off_t last_erased_page_start_offset; /* Last erased offset */
 #endif
 };
 
 /**
- * @brief Initialize context needed for buffered write to flash.
+ * @brief Initialize context needed for stream write to flash.
  *
  * @param ctx context to be initialized
  * @param fdev Flash device to operate on
  * @param buf Write buffer
  * @param buf_len Length of write buffer. Can not be larger than the page size
  * @param offset Offset within flash device to start writing to
- * @param size Number of bytes available for performing buffered write.
+ * @param size Number of bytes available for performing stream write.
  *             If this is '0', the size will be set to the total size
  *             of the flash device minus the offset.
  * @param cb Callback to be invoked on completed flash write operations.
  *
  * @return non-negative on success, negative errno code on fail
  */
-int fbw_init(struct fbw_ctx *ctx, struct device *fdev, u8_t *buf,
-	     size_t buf_len, size_t offset, size_t size, fbw_callback_t cb);
+int fsw_init(struct fsw_ctx *ctx, struct device *fdev, u8_t *buf,
+	     size_t buf_len, size_t offset, size_t size, fsw_callback_t cb);
 /**
  * @brief Read number of bytes written to the flash.
  *
@@ -90,7 +68,7 @@ int fbw_init(struct fbw_ctx *ctx, struct device *fdev, u8_t *buf,
  *
  * @return Number of bytes written to flash.
  */
-size_t fbw_bytes_written(struct fbw_ctx *ctx);
+size_t fsw_bytes_written(struct fsw_ctx *ctx);
 
 /**
  * @brief  Process input buffers to be written to flash device in single blocks.
@@ -106,7 +84,7 @@ size_t fbw_bytes_written(struct fbw_ctx *ctx);
  *
  * @return non-negative on success, negative errno code on fail
  */
-int fbw_write(struct fbw_ctx *ctx, const u8_t *data, size_t len, bool flush);
+int fsw_buffered_write(struct fsw_ctx *ctx, const u8_t *data, size_t len, bool flush);
 
 /**
  * @brief Erase the flash page to which a given offset belongs.
@@ -120,7 +98,7 @@ int fbw_write(struct fbw_ctx *ctx, const u8_t *data, size_t len, bool flush);
  *
  * @return non-negative on success, negative errno code on fail
  */
-int fbw_erase_page(struct fbw_ctx *ctx, off_t off);
+int fsw_erase_page(struct fsw_ctx *ctx, off_t off);
 
 #ifdef __cplusplus
 }
@@ -130,4 +108,4 @@ int fbw_erase_page(struct fbw_ctx *ctx, off_t off);
  * @}
  */
 
-#endif /* ZEPHYR_INCLUDE_STORAGE_FBW_H_ */
+#endif /* ZEPHYR_INCLUDE_STORAGE_FSW_H_ */
