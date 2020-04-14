@@ -15,7 +15,7 @@
 /**
  * @brief Abstraction over buffered stream writes.
  *
- * @defgroup stream_writer Stream sbw
+ * @defgroup stream Stream sbw
  * @{
  */
 
@@ -26,9 +26,18 @@
 extern "C" {
 #endif
 
-typedef int (*stream_writer_read_cb_t)(u8_t *buf, size_t len, size_t offset);
+typedef int (*stream_api_read)(u8_t *buf, size_t len, size_t offset);
 
-typedef int (*stream_writer_write_cb_t)(u8_t *buf, size_t len, size_t offset);
+typedef int (*stream_api_write)(u8_t *buf, size_t len, size_t offset);
+
+typedef int (*stream_api_validate)(u8_t *buf, size_t len, size_t offset);
+
+struct stream_api {
+	stream_api_read read;
+	stream_api_write write;
+	stream_api_validate validate;
+	void *ctx;
+};
 
 /**
  * @typedef fsw_callback_t
@@ -45,7 +54,6 @@ typedef int (*stream_writer_write_cb_t)(u8_t *buf, size_t len, size_t offset);
  * @param len The length of the data read.
  * @param offset The offset the data was read from.
  */
-typedef int (*stream_writer_write_done_cb_t)(u8_t *buf, size_t len, size_t offset);
 
 /**
  * @brief Structure for flash buffered writes
@@ -53,14 +61,12 @@ typedef int (*stream_writer_write_done_cb_t)(u8_t *buf, size_t len, size_t offse
  * Users should treat these structures as opaque values and only interact
  * with them through the below API.
  */
-struct stream_writer_ctx {
+struct stream_ctx {
 	u8_t *buf; /* Write buffer */
 	size_t buf_len; /* Length of write buffer */
 	size_t buf_bytes; /* Number of bytes currently stored in write buf */
 	size_t bytes_written; /* Number of bytes written to flash */
-	stream_writer_write_cb_t write;
-	stream_writer_read_cb_t read;
-	stream_writer_write_done_cb_t write_done;
+	struct stream_api api;
 };
 
 /**
@@ -75,10 +81,8 @@ struct stream_writer_ctx {
  *
  * @return non-negative on success, negative errno code on fail
  */
-int stream_writer_init(struct sw_ctx *ctx, u8_t *buf, size_t buf_len,
-		       stream_writer_read_cb_t read,
-		       stream_writer_write_cb_t write,
-		       stream_writer_validate_cb_t validate)
+int stream_init(struct stream_ctx *ctx, u8_t *buf, size_t buf_len,
+		       struct stream_api *api);
 
 /**
  * @brief Read number of bytes written to stream.
@@ -89,7 +93,7 @@ int stream_writer_init(struct sw_ctx *ctx, u8_t *buf, size_t buf_len,
  *
  * @return Number of bytes written to stream.
  */
-size_t stream_writer_bytes_written(struct sw_ctx *ctx);
+size_t stream_bytes_written(struct stream_ctx *ctx);
 
 /**
  * @brief  Process input buffers to be written to stream in single blocks.
@@ -105,8 +109,8 @@ size_t stream_writer_bytes_written(struct sw_ctx *ctx);
  *
  * @return non-negative on success, negative errno code on fail
  */
-int stream_writer_buffered_write(struct sw_ctx *ctx, const u8_t *data,
-				 size_t len, bool flush)
+int stream_buffered_write(struct stream_ctx *ctx, const u8_t *data,
+				 size_t len, bool flush);
 
 /**
  * @brief  Process input buffers to be written to stream directly.
@@ -117,7 +121,7 @@ int stream_writer_buffered_write(struct sw_ctx *ctx, const u8_t *data,
  *
  * @return non-negative on success, negative errno code on fail
  */
-int stream_writer_write(struct sw_ctx *ctx, const u8_t *data, size_t len);
+int stream_write(struct stream_ctx *ctx, const u8_t *data, size_t len);
 
 #ifdef __cplusplus
 }

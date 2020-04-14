@@ -1,0 +1,28 @@
+#
+# Copyright (c) 2020 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+config STORAGE_STREAM
+        bool
+
+menuconfig STREAM_FLASH
+	bool "Support storage streams to flash"
+	select FLASH_PAGE_LAYOUT
+        select STORAGE_STREAM
+	help
+	  Enable support of stream writes to flash
+
+if STREAM_FLASH
+config STREAM_FLASH_ERASE
+	bool "Perform erase operations"
+	help
+	  If disabled an external actor must erase the flash area being written
+	  to.
+
+module = STREAM_FLASH
+module-str = stream flash
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # STREAM_FLASH

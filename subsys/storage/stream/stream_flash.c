@@ -5,20 +5,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define LOG_MODULE_NAME FSW
-#define LOG_LEVEL CONFIG_FSW_LOG_LEVEL
+#define LOG_MODULE_NAME STREAM_FLASH
+#define LOG_LEVEL CONFIG_STREAM_FLASH_LOG_LEVEL
 #include <logging/log.h>
-LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_FSW_LOG_LEVEL);
+LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_STREAM_FLASH_LOG_LEVEL);
 
 #include <zephyr/types.h>
 #include <string.h>
 #include <drivers/flash.h>
 
-#include <storage/fsw.h>
+#include <storage/stream_flash.h>
 
 #ifdef CONFIG_FSW_ERASE
 
-int fsw_erase_page(struct fsw_ctx *ctx, off_t off)
+int stream_flash_erase_page(struct stream_flash_ctx *ctx, off_t off)
 {
 	int rc;
 	struct flash_pages_info page;
@@ -49,20 +49,20 @@ int fsw_erase_page(struct fsw_ctx *ctx, off_t off)
 
 #endif /* CONFIG_FSW_ERASE */
 
-static int write(struct stream_writer_ctx *ctx, size_t write_offset, size_t len)
+static int write(struct stream_ctx *ctx, size_t write_offset, size_t len)
 {
 	int rc = 0;
-	struct fsw_ctx fsw = (struct fsw_ctx *)ctx->backend_ctx;
-	size_t write_addr = fsw->offset + write_offset;
+	struct stream_flash_ctx *fctx = (struct stream_flash_ctx *)ctx->api_ctx;
+	size_t write_addr = fctx->offset + write_offset;
 
-	if (stream_writer_bytes_written(ctx) + len > ctx->available) {
+	if (stream_bytes_written(ctx) + len > ctx->available) {
 		return -ENOMEM;
 	}
 
 	if (IS_ENABLED(CONFIG_FSW_ERASE)) {
-		rc = fsw_erase_page(ctx, write_addr + len - 1);
+		rc = stream_flash_erase_page(ctx, write_addr + len - 1);
 		if (rc < 0) {
-			LOG_ERR("fsw_erase_page error %d offset=0x%08zx", rc,
+			LOG_ERR("stream_flash_erase_page error %d offset=0x%08zx", rc,
 					write_addr);
 			return rc;
 		}
@@ -80,39 +80,39 @@ static int write(struct stream_writer_ctx *ctx, size_t write_offset, size_t len)
 	return rc;
 }
 
-static int read(struct stream_writer_ctx *ctx, size_t read_addr, size_t len,
+static int read(struct stream_ctx *ctx, size_t read_addr, size_t len,
 		u8_t *buf)
 {
-	struct fsw_ctx fsw = (struct fsw_ctx *)ctx->backend_ctx;
+	struct stream_flash_ctx *fctx = (struct stream_flash_ctx *)ctx->api_ctx;
 
-	return flash_read(fsw->fdev, write_addr, buf, len);
+	return flash_read(fctx->fdev, write_addr, buf, len);
 }
 
 #ifndef CONFIG_FSW_ERASE
-int fsw_write(struct fsw_ctx *ctx, const u8_t *data, size_t len)
+int stream_flash_write(struct stream_flash_ctx *ctx, const u8_t *data, size_t len)
 {
-	stream_writer_write(ctx->stream, data, len);
+	stream_write(ctx->stream, data, len);
 
 	return rc;
 }
 #endif
 
-int fsw_buffered_write(struct fsw_ctx *ctx, const u8_t *data, size_t len,
+int stream_flash_buffered_write(struct stream_flash_ctx *ctx, const u8_t *data, size_t len,
 		       bool flush)
 {
-	stream_writer_buffered_write(ctx->stream, data, len, flush);
+	stream_buffered_write(ctx->stream, data, len, flush);
 
 	return rc;
 }
 
-size_t fsw_bytes_written(struct fsw_ctx *ctx)
+size_t stream_flash_bytes_written(struct stream_flash_ctx *ctx)
 {
-	return stream_writer_bytes_written(ctx->stream);
+	return stream_bytes_written(ctx->stream);
 }
 
-int fsw_init(struct fsw_ctx *ctx, struct device *fdev, u8_t *buf,
+int stream_flash_init(struct stream_flash_ctx *ctx, struct device *fdev, u8_t *buf,
 	     size_t buf_len, size_t offset, size_t size,
-	     stream_writer_validate_cb_t validate)
+	     stream_api_validate validate)
 {
 	if (!ctx || !fdev) {
 		return -EFAULT;
@@ -122,6 +122,7 @@ int fsw_init(struct fsw_ctx *ctx, struct device *fdev, u8_t *buf,
 	size_t total_size = 0;
 	const struct flash_pages_layout *layout;
 	const struct flash_driver_api *api = fdev->driver_api;
+
 
 	/* Calculate the total size of the flash device */
 	api->page_layout(fdev, &layout, &layout_size);
@@ -152,8 +153,12 @@ int fsw_init(struct fsw_ctx *ctx, struct device *fdev, u8_t *buf,
 	ctx->last_erased_page_start_offset = -1;
 #endif
 
-	return stream_writer_init(&ctx->stream, &ctx, buf, buf_len, read, write,
-				  validate);
+	struct stream_api api = {
+		.read = read,
+		.write = write,
+		.validate = validate,
+		.ctx = ctx
+	};
 
-	return rc;
+	return stream_init(&ctx->stream, buf, buf_len, api);
 }

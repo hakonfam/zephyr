@@ -11,7 +11,7 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME, CONFIG_STREAM_WRITER_LOG_LEVEL);
 #include <zephyr/types.h>
 #include <string.h>
 
-#include <storage/stream_writer.h>
+#include <stream.h>
 
 
 static int sync(struct sw_ctx *ctx)
@@ -51,7 +51,7 @@ static int sync(struct sw_ctx *ctx)
 	return rc;
 }
 
-int stream_writer_write(struct sw_ctx *ctx, const u8_t *data, size_t len)
+int stream_write(struct sw_ctx *ctx, const u8_t *data, size_t len)
 {
 	if (ctx == NULL || data == NULL) {
 		return -EFAULT;
@@ -64,7 +64,7 @@ int stream_writer_write(struct sw_ctx *ctx, const u8_t *data, size_t len)
 
 }
 
-int stream_writer_buffered_write(struct sw_ctx *ctx, const u8_t *data,
+int stream_buffered_write(struct sw_ctx *ctx, const u8_t *data,
 				 size_t len, bool flush)
 {
 	int processed = 0;
@@ -108,15 +108,15 @@ int stream_writer_buffered_write(struct sw_ctx *ctx, const u8_t *data,
 	return rc;
 }
 
-size_t stream_writer_bytes_written(struct sw_ctx *ctx)
+size_t stream_bytes_written(struct sw_ctx *ctx)
 {
 	return ctx->bytes_written;
 }
 
-int stream_writer_init(struct sw_ctx *ctx, u8_t *buf, size_t buf_len,
-		       stream_writer_read_cb_t read,
-		       stream_writer_write_cb_t write,
-		       stream_writer_validate_cb_t validate)
+int stream_init(struct sw_ctx *ctx, u8_t *buf, size_t buf_len,
+		       stream_read_cb_t read,
+		       stream_write_cb_t write,
+		       stream_validate_cb_t validate)
 {
 	if (ctx == NULL || write == NULL ||
 	    (validate != NULL && read == NULL)) {
