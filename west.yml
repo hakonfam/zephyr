@@ -87,9 +87,8 @@ manifest:
     - name: mcuboot
       revision: 80a76f4af4314635bef83272779ddbed6021fc32
       path: bootloader/mcuboot
-    - name: mynewt-mcumgr
-      remote: apache
-      revision: pull/79/head
+    - name: mcumgr
+      revision: pull/20/head
       path: modules/lib/mcumgr
     - name: net-tools
       revision: 1080094bc246357c6c35e80e8b2d5d0ce7e0d963
