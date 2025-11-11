@@ -96,10 +96,10 @@ static void commit_changes(uintptr_t addr_end)
 	/* Issue a dummy write, since we didn't have anything to write here.
 	 * Doing this lets us finalize our changes before we exit the driver API.
 	 */
-	while (!nrf_mram_ready(addr_end)) {
+	sys_write8(sys_read8(addr_end), addr_end);
+	while (nrf_mram_ready(addr_end)) {
 		/* Wait until MRAM controller is ready */
 	}
-	sys_write8(sys_read8(addr_end), addr_end);
 }
 
 static int nrf_mram_read(const struct device *dev, off_t offset, void *data, size_t len)
@@ -133,18 +133,18 @@ static int nrf_mram_write(const struct device *dev, off_t offset, const void *da
 
 	mram_no_latency_sync_request();
 	for (uint32_t i = 0; i < (len / MRAM_WORD_SIZE); i++) {
-		while (!nrf_mram_ready(addr + (i * MRAM_WORD_SIZE))) {
-			/* Wait until MRAM controller is ready */
-		}
 		memcpy((void *)(addr + (i * MRAM_WORD_SIZE)),
 		       (void *)((uintptr_t)data + (i * MRAM_WORD_SIZE)), MRAM_WORD_SIZE);
-	}
-	if (len % MRAM_WORD_SIZE) {
-		while (!nrf_mram_ready(addr + (len & ~MRAM_WORD_MASK))) {
+		while (nrf_mram_ready(addr + (i * MRAM_WORD_SIZE))) {
 			/* Wait until MRAM controller is ready */
 		}
+	}
+	if (len % MRAM_WORD_SIZE) {
 		memcpy((void *)(addr + (len & ~MRAM_WORD_MASK)),
 		       (void *)((uintptr_t)data + (len & ~MRAM_WORD_MASK)), len & MRAM_WORD_MASK);
+		while (nrf_mram_ready(addr + (len & ~MRAM_WORD_MASK))) {
+			/* Wait until MRAM controller is ready */
+		}
 	}
 	commit_changes(addr + len);
 	mram_no_latency_sync_release();
@@ -166,17 +166,17 @@ static int nrf_mram_erase(const struct device *dev, off_t offset, size_t size)
 
 	mram_no_latency_sync_request();
 	for (uint32_t i = 0; i < (size / MRAM_WORD_SIZE); i++) {
-		while (!nrf_mram_ready(addr + (i * MRAM_WORD_SIZE))) {
+		memset((void *)(addr + (i * MRAM_WORD_SIZE)), ERASE_VALUE, MRAM_WORD_SIZE);
+		while (nrf_mram_ready(addr + (i * MRAM_WORD_SIZE))) {
 			/* Wait until MRAM controller is ready */
 		}
-		memset((void *)(addr + (i * MRAM_WORD_SIZE)), ERASE_VALUE, MRAM_WORD_SIZE);
 	}
 	if (size % MRAM_WORD_SIZE) {
-		while (!nrf_mram_ready(addr + (size & ~MRAM_WORD_MASK))) {
-			/* Wait until MRAM controller is ready */
-		}
 		memset((void *)(addr + (size & ~MRAM_WORD_MASK)), ERASE_VALUE,
 		       size & MRAM_WORD_MASK);
+		while (nrf_mram_ready(addr + (size & ~MRAM_WORD_MASK))) {
+			/* Wait until MRAM controller is ready */
+		}
 	}
 	commit_changes(addr + size);
 	mram_no_latency_sync_release();
